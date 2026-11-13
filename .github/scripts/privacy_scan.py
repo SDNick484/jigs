@@ -42,7 +42,7 @@ ALLOWED_EMAIL = re.compile(
     r"^(?:[^@]+@users\.noreply\.github\.com|(?:noreply|support)@github\.com|noreply@anthropic\.com|git@github\.com|"
     r"[^@]+@(?:[a-z0-9-]+\.)*example\.(?:com|org|net)|[^@]+@[a-z0-9.-]*\.(?:test|invalid|example))$", re.I)
 DOC_NETS = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")]
-PRIVATE_NETS = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
+PRIVATE_NETS = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]  # privacy-scan: allow (the RFC 1918 ranges themselves)
 FIXTURE_DIRS = ("tests/fixtures/",)
 ALLOW_MARK = "privacy-scan: allow"
 ALLOWED_COMMITS_FILE = ".github/privacy-scan-allowed-commits"

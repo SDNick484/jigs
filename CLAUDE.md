@@ -12,8 +12,10 @@ a procedure that was first done by hand several times, with the lessons that wer
   links to and `scripts/` for steps that must run the same way every time. A skill's tests live in
   `skills/<name>/tests/`.
 - `.github/scripts/privacy_scan.py` and `tests/test_privacy_scan.py`: the public-repo scan, copied
-  verbatim from `mcp-server-steam-backlog` at `c6a969b`. Change it there (or in
-  `steam-backlog-triage`, where it started) and copy it again; don't edit it here.
+  from `mcp-server-steam-backlog` at `c6a969b`. One difference: the `PRIVATE_NETS` line carries a
+  `privacy-scan: allow` mark, because this repo's denylist matched the scanner's own list of
+  private ranges. Change anything else there (or in `steam-backlog-triage`, where it started) and
+  copy it again, keeping that mark; don't edit it here.
   `.github/privacy-scan-allowed-commits` is optional and absent: see the script's docstring.
 - `.github/scripts/check_script_copies.py` and `tests/test_check_script_copies.py`: the copy check
   (below).
