@@ -24,6 +24,7 @@ rest of this repo.
 | Skill | Use it to |
 |---|---|
 | [`hardware-run`](skills/hardware-run/SKILL.md) | Record a sitting with a real device and a repository's hardware validation checklist: decide what each observation means for the registry of unverified assumptions, and return one pull request that updates every place the result is stated (registry, checklist, status tables and prose, changelog, scanned captures). |
+| [`issue-queue`](skills/issue-queue/SKILL.md) | Work a repository's open `Prompt:` issues: decide what can run now and in what order, run each to an open pull request with CI green, report once, and restack after merges. Also writes a prompt issue in the queue's format. |
 
 ## Conventions
 
