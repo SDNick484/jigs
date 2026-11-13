@@ -55,13 +55,37 @@ COMMON = {"main", "master", "develop", "HEAD"}
 DOC_WORDS = re.compile(r"\b(README|CHANGELOG|CLAUDE\.md|HARDWARE_VALIDATION|CONTRIBUTING)\b")
 
 
+def parse_pages(out: str) -> object:
+    """Decode `gh api --paginate` output: one JSON document per page, written back to back.
+
+    A single object comes back as itself; several arrays (one per page) as one list. The pages
+    are decoded one at a time. Joining them by rewriting "][" in the raw text also rewrote any
+    issue body that contained those characters, such as a Markdown link next to a checkbox.
+    """
+    decoder = json.JSONDecoder()
+    docs = []
+    pos = 0
+    while pos < len(out):
+        if out[pos].isspace():
+            pos += 1
+            continue
+        doc, pos = decoder.raw_decode(out, pos)
+        docs.append(doc)
+    if len(docs) == 1:
+        return docs[0]
+    merged: list[object] = []
+    for doc in docs:
+        if not isinstance(doc, list):
+            raise ValueError("paginated output mixes arrays and objects")
+        merged.extend(doc)
+    return merged
+
+
 def gh(path: str) -> object:
     out = subprocess.run(
         ["gh", "api", "--paginate", path], check=True, capture_output=True, text=True
     ).stdout
-    # --paginate concatenates JSON arrays as "][": join them.
-    out = out.replace("]\n[", ",").replace("][", ",")
-    return json.loads(out)
+    return parse_pages(out)
 
 
 def sentences_matching(body: str, pattern: re.Pattern[str]) -> list[str]:
