@@ -18,8 +18,7 @@ concurrency:
 # was taken from.
 
 jobs:
-  # The repo's own checks (privacy scan, copy check) and the skills' scripts are standard library only, so there is
-  # nothing to install.
+  # The repo's own checks (privacy scan, copy check) are standard library only, so there is nothing to install.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -29,13 +28,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m unittest discover -s tests -v
-      # Each skill's own tests (skills/<name>/tests/), one skill at a time so two skills can both have a test_x.py.
+      # Each skill's own tests (skills/<name>/tests/), one run per skill so two skills can both have a test_x.py.
       - name: Skill tests
         run: |
-          for dir in skills/*/tests; do
-            [ -d "$dir" ] || continue
-            echo "::group::$dir"
-            python -m unittest discover -s "$dir" -v
+          for d in skills/*/tests; do
+            [ -d "$d" ] || continue
+            echo "::group::$d"
+            python -m unittest discover -s "$d" -v
             echo "::endgroup::"
           done
 
