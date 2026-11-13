@@ -19,7 +19,11 @@ One directory per skill. Each is self-contained: copy `skills/<name>/` into your
 (for Claude Code, `~/.claude/skills/` or a project's `.claude/skills/`) and it works without the
 rest of this repo.
 
-No skills are published yet.
+## Skills
+
+| Skill | Use it to |
+|---|---|
+| [`hardware-run`](skills/hardware-run/SKILL.md) | Record a sitting with a real device and a repository's hardware validation checklist: decide what each observation means for the registry of unverified assumptions, and return one pull request that updates every place the result is stated (registry, checklist, status tables and prose, changelog, scanned captures). |
 
 ## Conventions
 
@@ -34,7 +38,8 @@ No skills are published yet.
 
 CI runs three jobs, all standard library Python:
 
-- the repo's tests: `python -m unittest discover -s tests -v`
+- the repo's tests, `python -m unittest discover -s tests -v`, then each skill's own from
+  `skills/<name>/tests/`
 - a privacy scan over every tracked file and every commit's author, committer and message:
   `python .github/scripts/privacy_scan.py`. It reports the location and the rule, never the
   matched text. A denylist of terms no pattern can know is read from the `PRIVACY_DENYLIST`

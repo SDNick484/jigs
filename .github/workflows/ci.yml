@@ -28,6 +28,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m unittest discover -s tests -v
+      # Each skill's own tests (skills/<name>/tests/), one run per skill so two skills can both have a test_x.py.
+      - name: Skill tests
+        run: |
+          for d in skills/*/tests; do
+            [ -d "$d" ] || continue
+            echo "::group::$d"
+            python -m unittest discover -s "$d" -v
+            echo "::endgroup::"
+          done
 
   # No personal details in a public repo. Prints where and which rule, never the matched value.
   privacy-scan:
