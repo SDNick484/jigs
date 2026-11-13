@@ -19,8 +19,9 @@ a procedure that was first done by hand several times, with the lessons that wer
   `.github/privacy-scan-allowed-commits` is optional and absent: see the script's docstring.
 - `.github/scripts/check_script_copies.py` and `tests/test_check_script_copies.py`: the copy check
   (below).
-- `.github/workflows/ci.yml`: the repo tests, the privacy scan over files and every commit, and
-  the copy check.
+- `.github/workflows/ci.yml`: the repo tests and each skill's tests (one `unittest discover` per
+  `skills/<name>/tests/`, so a new skill's tests run without touching the workflow), the privacy
+  scan over files and every commit, and the copy check.
 
 ## Rules
 
@@ -56,6 +57,7 @@ a procedure that was first done by hand several times, with the lessons that wer
 
 ```sh
 python -m unittest discover -s tests -v          # the repo's own checks (standard library only)
+for d in skills/*/tests; do python -m unittest discover -s "$d" -v; done   # each skill's tests
 python .github/scripts/privacy_scan.py           # patterns only, unless PRIVACY_DENYLIST is set
 python .github/scripts/check_script_copies.py    # copies of a shared script match
 ```
