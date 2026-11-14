@@ -1,6 +1,6 @@
 ---
 name: issue-queue
-description: "Use when asked to \"work the issue queue in <repo>\", \"run the prompt issues\", \"do the open Prompt issues\", \"write a prompt issue for X\", or \"turn this plan into prompt issues\" (also for a new, empty repo). Plans which Prompt: issues can run now, runs each to an open PR with green CI using parallel agents, and reports once. Not for a single \"address issue #N\" request."
+description: "Use when asked to \"work the issue queue in a repo\", \"run the prompt issues\", \"do the open Prompt issues\", \"write a prompt issue for X\", or \"turn this plan into prompt issues\" (also for a new, empty repo). Plans which Prompt: issues can run now, runs each to an open PR with green CI using parallel agents, and reports once. Not for a single \"address issue #N\" request."
 ---
 
 # Issue queue
