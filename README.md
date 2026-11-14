@@ -24,7 +24,7 @@ rest of this repo.
 | Skill | Use it to |
 |---|---|
 | [`hardware-run`](skills/hardware-run/SKILL.md) | Record a sitting with a real device and a repository's hardware validation checklist: decide what each observation means for the registry of unverified assumptions, and return one pull request that updates every place the result is stated (registry, checklist, status tables and prose, changelog, scanned captures). |
-| [`issue-queue`](skills/issue-queue/SKILL.md) | Work a repository's open `Prompt:` issues: decide what can run now and in what order, run each to an open pull request with CI green, report once, and restack after merges. Also writes a prompt issue in the queue's format. |
+| [`issue-queue`](skills/issue-queue/SKILL.md) | Work a repository's open `Prompt:` issues: decide what can run now and in what order, run each to an open pull request with CI green, report once, and restack after merges. Also writes a prompt issue in the queue's format, and turns a written plan into a queue: seeds an empty repository, and writes the tasks' dependencies so independent ones run at the same time. |
 | [`sibling-sweep`](skills/sibling-sweep/SKILL.md) | Take one change across a family of similar repositories: find every repository it applies to with a probe, separate what is identical from what must be worked out per repository, pilot one, then open one pull request per repository with CI verified and report in one table. |
 
 ## Conventions

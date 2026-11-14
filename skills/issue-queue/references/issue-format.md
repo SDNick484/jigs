@@ -18,6 +18,7 @@ This issue is a prompt for a new Claude session. Paste it, or say "work the issu
 
 **Suggested model:** <model>. <one-line reason>
 **Runs after:** <none | #N (why: what it must settle first)>
+**Builds on:** <none | #N (what it uses from it)>   (optional; leave the line out when there is nothing)
 **Needs the owner:** <no | before starting: why | at the end: what step, e.g. pushing the tag>
 **Reserves:** <none | HARDWARE_VALIDATION step 14, ...>   (a suggestion; the queue run assigns the final numbers)
 
@@ -43,6 +44,8 @@ The PR is open with the verification gate and CI green, and its description list
 Rules for the header:
 
 - `Runs after` names issues by number with the reason, and is written on **both** sides: if #31 can overturn #30, #31 also says so in prose ("If X, #30 needs rethinking") so a reader of either finds the other.
+- `Builds on` is for code, `Runs after` is for outcomes. "Uses the session cookie #13 adds" is `Builds on: #13`: the queue starts this issue from #13's branch without waiting for a merge. "#31 decides whether this design survives" is `Runs after: #31`: the queue holds it. Writing a code dependency as `Runs after` is safe but serialises the whole plan behind the owner's merges.
+- Name the files the issue creates and the existing files it edits, under "What to build". The planner uses them to decide what can run at the same time.
 - `Needs the owner: at the end` means the session can run to the PR and stop there (for example a release PR whose tag push needs the owner). `before starting` means the queue holds it.
 - Model choice: Opus for a new subsystem, safety-relevant refusals or tricky concurrency; Sonnet for well-bounded work, checklists and mechanical releases; Haiku only for small edits a test proves. Name one model first; an alternative after "or".
 

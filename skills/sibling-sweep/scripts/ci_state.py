@@ -19,8 +19,10 @@ line, then one line per check:
            status is failure/error
   NO_CI    nothing reported and the repository has no workflows and no commit statuses:
            there is no CI to wait for. Not a pass; say so and rely on the local gate.
+  NO_BRANCH  ref:NAME does not exist: the repository is empty, or has no such branch or
+           commit. Nothing can be based on it until it does.
 
-Exit code: 0 GREEN, 1 FAILED, 2 PENDING, 3 REQUEUE, 4 NO_CI, 64 usage.
+Exit code: 0 GREEN, 1 FAILED, 2 PENDING, 3 REQUEUE, 4 NO_CI, 5 NO_BRANCH, 64 usage.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from collections.abc import Callable
 from typing import Any
 
 OK = {"success", "skipped", "neutral"}
-EXIT = {"GREEN": 0, "FAILED": 1, "PENDING": 2, "REQUEUE": 3, "NO_CI": 4}
+EXIT = {"GREEN": 0, "FAILED": 1, "PENDING": 2, "REQUEUE": 3, "NO_CI": 4, "NO_BRANCH": 5}
 
 Gh = Callable[..., Any]
 
@@ -40,6 +42,13 @@ Gh = Callable[..., Any]
 def gh(*args: str) -> Any:
     out = subprocess.run(["gh", "api", *args], check=True, capture_output=True, text=True).stdout
     return json.loads(out) if out.strip() else {}
+
+
+def ref_is_absent(err: subprocess.CalledProcessError) -> bool:
+    """True when GitHub answered that the ref is not there: 409 for an empty repository, 404 or
+    422 for a branch or commit it does not have. Any other failure (network, credentials) is
+    not an answer about the ref and is raised."""
+    return any(f"HTTP {code}" in (err.stderr or "") for code in (404, 409, 422))
 
 
 def started_no_step(api: Gh, repo: str, job_id: int) -> bool:
@@ -122,7 +131,13 @@ def main(argv: list[str] | None = None, api: Gh = gh) -> int:
         return 64
     repo, target = args[0], args[1]
     if target.startswith("ref:"):
-        sha = api(f"repos/{repo}/commits/{target[4:]}")["sha"]
+        try:
+            sha = api(f"repos/{repo}/commits/{target[4:]}")["sha"]
+        except subprocess.CalledProcessError as err:
+            if not ref_is_absent(err):
+                raise
+            print(f"NO_BRANCH  {target}: the repository is empty or has no such branch or commit")
+            return EXIT["NO_BRANCH"]
         label = target
     else:
         sha = api(f"repos/{repo}/pulls/{target}")["head"]["sha"]

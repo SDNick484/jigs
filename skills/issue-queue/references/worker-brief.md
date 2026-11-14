@@ -7,7 +7,7 @@ You are implementing issue #<N> in <OWNER/REPO>: "<title>". The issue body is yo
   gh api repos/<OWNER/REPO>/issues/<N> -q .body
 
 Workspace (already set up for you; use nothing else):
-- Worktree: <path>, branch <branch>, based on <main | branch-of-#M (stacked)>.
+- Worktree: <path>, branch <branch>, based on <main | branch-of-#M (same lane: #M's commits are below yours)>.
 - Virtualenv: <path>/.venv. Run every command as <path>/.venv/bin/python -m ..., never a bare `python` or `pytest`:
   the system Python has a different checkout installed editable and would test the wrong code.
 
