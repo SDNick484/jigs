@@ -144,5 +144,40 @@ class CiState(unittest.TestCase):
             self.assertEqual(ci_state.main(["not-a-repo", "7"]), 64)
 
 
+
+class NoBranch(unittest.TestCase):
+    """ref:NAME on a repository with no commits, or with no such branch."""
+
+    def api_failing_with(self, stderr: str):
+        def api(*args: str):
+            raise subprocess.CalledProcessError(1, "gh", stderr=stderr)
+        return api
+
+    def run_ref(self, api) -> tuple[int, str]:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = ci_state.main([REPO, "ref:main"], api=api)
+        return code, out.getvalue()
+
+    def test_empty_repository_is_no_branch_not_a_traceback(self):
+        code, out = self.run_ref(self.api_failing_with("gh: Git Repository is empty. (HTTP 409)"))
+        self.assertEqual((code, out.split()[0]), (5, "NO_BRANCH"))
+
+    def test_unknown_branch_is_no_branch(self):
+        code, _ = self.run_ref(self.api_failing_with("gh: No commit found for SHA: main (HTTP 422)"))
+        self.assertEqual(code, 5)
+
+    def test_a_failure_that_is_not_an_answer_is_raised(self):
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.run_ref(self.api_failing_with("gh: connection refused"))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.run_ref(self.api_failing_with("gh: Bad credentials (HTTP 401)"))
+
+    def test_a_missing_pull_request_is_still_an_error(self):
+        out = io.StringIO()
+        with self.assertRaises(subprocess.CalledProcessError), contextlib.redirect_stdout(out):
+            ci_state.main([REPO, "7"], api=self.api_failing_with("gh: Not Found (HTTP 404)"))
+
+
 if __name__ == "__main__":
     unittest.main()
