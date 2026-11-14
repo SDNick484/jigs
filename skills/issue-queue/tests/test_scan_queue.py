@@ -60,8 +60,8 @@ class FakeGh:
     """Answers scan_queue.gh(path). `tree` is the set of paths on the default branch, or None
     for a repository with no commits."""
 
-    def __init__(self, issues, tree=frozenset()):
-        self.issues, self.tree = issues, tree
+    def __init__(self, issues, tree=frozenset(), pulls=()):
+        self.issues, self.tree, self.pulls = issues, tree, list(pulls)
 
     def absent(self, code: int):
         return subprocess.CalledProcessError(1, "gh", stderr=f"gh: Not Found (HTTP {code})")
@@ -80,7 +80,7 @@ class FakeGh:
         if "/issues?" in path:
             return self.issues
         if "/pulls?" in path:
-            return []
+            return self.pulls
         raise self.absent(404)
 
 
@@ -132,6 +132,28 @@ class DefaultBranch(unittest.TestCase):
     def test_builds_on_header_is_read(self):
         body = "**Runs after:** none\n**Builds on:** #1 (uses its schema)\n**Needs the owner:** no"
         self.assertEqual(scan_queue.HEADER["builds_on"].search(body).group(1).strip(), "#1 (uses its schema)")
+
+
+class PullRequestBases(unittest.TestCase):
+    """A pull request opened against another one's branch never reaches the default branch."""
+
+    PULLS = [
+        {"number": 28, "body": "Closes #2", "base": {"ref": "main"}},
+        {"number": 29, "body": "Closes #3", "base": {"ref": "claude/first"}},
+    ]
+
+    def test_an_open_pr_against_another_branch_is_flagged(self):
+        out = scan(FakeGh([prompt(2, BODY)], tree={PLAN}, pulls=self.PULLS))
+        self.assertIn("PR #29 is opened against claude/first, not main", out)
+        self.assertNotIn("PR #28 is opened against", out)
+
+    def test_json_lists_them(self):
+        data = json.loads(scan(FakeGh([prompt(2, BODY)], tree={PLAN}, pulls=self.PULLS), "--json"))
+        self.assertEqual(data["prs_off_default_branch"], [{"number": 29, "base": "claude/first"}])
+
+    def test_nothing_is_printed_when_every_pr_targets_the_default_branch(self):
+        out = scan(FakeGh([prompt(2, BODY)], tree={PLAN}, pulls=self.PULLS[:1]))
+        self.assertNotIn("is opened against", out)
 
 
 if __name__ == "__main__":

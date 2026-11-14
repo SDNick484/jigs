@@ -146,6 +146,13 @@ def main() -> int:
             in_progress.setdefault(int(n), []).append(pr["number"])
 
     branch, branch_exists = default_branch(repo)
+    # A pull request opened against another pull request's branch merges into that branch,
+    # not into the default one, and still shows as merged.
+    off_default = [
+        {"number": pr["number"], "base": pr["base"]["ref"]}
+        for pr in open_prs
+        if pr.get("base", {}).get("ref") not in (None, branch)
+    ]
     doc_cache: dict[str, bool] = {}
 
     def doc_missing(path: str) -> bool:
@@ -215,7 +222,8 @@ def main() -> int:
                 )
 
     if as_json:
-        print(json.dumps({"repo": repo, "default_branch": {"name": branch, "exists": branch_exists}, "prompts": rows,
+        print(json.dumps({"repo": repo, "default_branch": {"name": branch, "exists": branch_exists},
+                 "prs_off_default_branch": off_default, "prompts": rows,
                  "overlaps": overlaps}, indent=2))
         return 0
 
@@ -225,6 +233,9 @@ def main() -> int:
     else:
         print(f"default branch: none ({branch} has no commits). No worker can branch from it or read "
               "a file on it: seed the repository before planning.\n")
+    for o in off_default:
+        print(f"!! PR #{o['number']} is opened against {o['base']}, not {branch}: merging it will not "
+              f"reach {branch}. Retarget it before it is merged.\n")
     for r in rows:
         print(f"#{r['number']} {r['title']}")
         print(f"  labels: {', '.join(r['labels']) or '-'}")

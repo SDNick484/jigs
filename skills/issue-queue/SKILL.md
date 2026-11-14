@@ -20,6 +20,7 @@ It was built from the hand run in `mcp-server-harmony` on 2026-11-12 (PRs #26 to
 - **Never edits a file the repo marks as shared or generated from elsewhere** (for example modules synced in from a shared repository). A worker that finds it needs to stops and reports; that change is two PRs in two repos.
 - **Never says green from an agent's word.** Only `scripts/ci_state.py` decides.
 - **Never commits to the default branch.** One exception: the seeding commit in a repo with no commits (section 3), documents only, and only when the owner says so. Everything else reaches the default branch through a PR the owner merges.
+- **Never changes repository settings** (branch protection, auto-delete of merged branches, secrets). If a setting would help, it says which and why; turning it on is the owner's.
 - Never force-pushes a branch it did not create, and never skips, xfails or loosens a test to get green.
 
 When it stops early, it says which issue, which step, the exact command and output, and what it needs from the owner.
@@ -44,11 +45,14 @@ python3 scripts/scan_queue.py OWNER/REPO          # prompts, headers, #refs with
 python3 scripts/ci_state.py OWNER/REPO ref:main   # is main green? a red main fails every worker's gate
 ```
 
+Then run the repo's gate yourself, on an untouched checkout of the default branch, set up the way a worker's worktree will be. CI being green says the code is fine; it does not say this machine can run the gate. A missing tool (a display server, a compiler, a browser) shows up here once, not in every worker. Count a test that was skipped because something is missing as not run: if the gate skips tests CI runs, stop and say what is missing.
+
 Then read every prompt issue's body in full, side by side. The script finds candidates; the dependencies that matter are often written in the *other* issue (see 1b). If main is `REQUEUE`, say so in the plan; re-running main's job is the owner's call unless they have asked for it. If main is `FAILED`, stop: nothing started now can go green.
 
-Two results stop the run before planning, because no worker could start:
+Three results stop the run before planning:
 
 - `scan_queue.py` prints `default branch: none`, or `ci_state.py` prints `NO_BRANCH`: the repo has no commits, so there is nothing to branch from. Say so and offer the seeding commit (section 3).
+- `scan_queue.py` prints `PR #N is opened against <branch>`: an open pull request targets something other than the default branch, so merging it will not land. Say so before planning around it; retarget it if this run opened it.
 - `scan_queue.py` prints `cited but not on <branch>` for a document the issue tells the worker to read (a spec, a plan). The issue's contract is missing. Say which document and offer to add it. The same line appears for a document the issue will create; read the sentence to tell which, and ignore that case.
 
 ### 1b. Sort the queue
@@ -69,12 +73,14 @@ Skip an issue that already has an open PR; report it as in progress.
 The aim is the most issues in flight at once with no two workers editing the same lines. For the runnable set, list what each will touch: the files it creates, the existing code it changes, and its append points (from step 0's "changes together" list, not only what the issue names). Each pair of issues is then one of three cases; `references/planning.md` has the test for each.
 
 - **Disjoint** (different files, or only new files): run at the same time from `main`, no stack.
-- **Shares only append points** (a README row, a changelog entry, a route table, a registry): run at the same time from `main`; the orchestrator stacks the finished branches in a chosen merge order (smallest and least risky first) and resolves the appends once. Hand out shared numbers now, in merge order (the next free checklist step, the next migration number); an issue's own number is a suggestion written before other work landed.
+- **Shares only append points** (a README table row, a changelog bullet, a route table, a registry with one entry per line): run at the same time from `main`; the orchestrator stacks the finished branches in a chosen merge order (smallest and least risky first) and resolves the appends once. Hand out shared numbers now, in merge order (the next free checklist step, the next migration number); an issue's own number is a suggestion written before other work landed.
 - **Changes the same existing code, or one builds on the other**: same lane, one after the other. The second worker starts from the first one's finished branch. Two agents rewriting one function in parallel produce a conflict that has to be resolved by guessing what both meant; a lane costs minutes and removes the guess.
 
-Independent lanes run at the same time. Say at the top of each stacked PR what it sits on.
+A shared spot is an append point only when each addition is its own line. A paragraph that several issues each extend, or a list written on one line, is the same code: every branch rewrites the same lines. Put those issues in one lane, or offer the owner a small first PR that turns the spot into a table or a one-per-line list, and run the rest after it merges.
 
-Stacking costs this: each PR's diff shows the earlier PRs' commits until they merge. Say that in the PR's first line so a reviewer reads only the last commit.
+Independent lanes run at the same time.
+
+**Every PR is opened against the default branch**, whatever branch its work started from. A PR whose base is another PR's branch merges into that branch and stops there, and GitHub still shows it as merged. Stacking is about what a branch contains, never about where its PR points. The cost: each PR's diff shows the commits of the PRs below it until they merge. Say in the PR's first line what it sits on and that a reviewer reads only the last commits.
 
 ### 1d. Show the plan, then go
 
@@ -82,7 +88,7 @@ Post the plan in the format in `references/planning.md`: order, model per issue,
 
 ### 1e. Run
 
-One agent per issue, started as soon as its lane allows, on the model in the issue's `**Suggested model:**` line (the first one named), each in its own git worktree with its own virtualenv. Give each agent the brief in `references/worker-brief.md`, filled in. Its rules come from the hand run's failures: a shared editable install testing the wrong checkout, shallow clones breaking rebases, and a git proxy that allows two concurrent operations per repo.
+One agent per issue, started as soon as its lane allows, on the model in the issue's `**Suggested model:**` line (the first one named), each in its own git worktree with its own virtualenv. Write the rules every worker shares to one file and give each agent that file's path plus its own short brief (`references/worker-brief.md`); repeating the rules in every brief costs the same text once per worker. Everything a worker writes outside git (logs, the PR body) goes under its own worktree: a shared scratch folder lets one worker's gate log overwrite another's. Its rules come from the hand run's failures: a shared editable install testing the wrong checkout, shallow clones breaking rebases, and a git proxy that allows two concurrent operations per repo.
 
 An issue that stacks on another starts when that one's worker has handed back its branch, in a worktree based on that branch. Lanes that share nothing run at the same time.
 
@@ -94,15 +100,16 @@ For each PR, run `scripts/ci_state.py OWNER/REPO <PR>` until it is not `PENDING`
 
 - `GREEN`: done.
 - `REQUEUE`: a job was cancelled before any step ran (a runner queue problem, seen twice on 2026-11-12 on `wheel-smoke (macos-latest)`). Re-run it once with `--rerun-queued`. It is neither a pass nor a failure.
+- `FAILED` on a commit where the same check passed before, with no code change between: that is a finding, not a retry. A test that passes and then fails is telling you about a race or an ordering dependency. Read the failure, and either fix it or name it in the report; never re-run until green and move on.
 - `FAILED`: read the log, fix on the branch (or send the worker back), run the gate, push, check again. After a fix on a stacked branch, the branches above it need restacking.
 
 ### 1g. Report once
 
-When every started PR is `GREEN` (or definitively stuck), send one message: the table in `references/planning.md` (PR, what it does, what to check when reviewing, what is unverified on hardware), then the merge order and the merge method (**merge commits, not squash, for a stack**: a squash rewrites the base the next branch sits on and brings the conflicts back), then the held issues with reasons and questions.
+When every started PR is `GREEN` (or definitively stuck), send one message: the table in `references/planning.md` (PR, what it does, what to check when reviewing, what is unverified on hardware), then the merge steps written out one per line (which PR, "merge commit, not squash", then "say merged and wait for the restack" before the next: a squash rewrites what the next branch sits on and brings the conflicts back), then the held issues with reasons and questions.
 
 ### 1h. When the owner says "merged"
 
-Follow `references/after-merge.md`: deepen the clone, rebase what is left onto the new `main`, resolve conflicts, run the full gate, look at every table and list literal a conflict touched, push with `--force-with-lease`, re-check CI, and report in two lines. Re-sort the queue: a merge may have unblocked an issue.
+Follow `references/after-merge.md`: first run `scripts/landed.py OWNER/REPO <PR>...` on what was merged, and stop on anything but `LANDED` (a PR can be merged without reaching the default branch); then deepen the clone, rebase what is left onto the new `main`, resolve conflicts, run the full gate, look at every table and list literal a conflict touched, push with `--force-with-lease`, re-check CI, and report in two lines. Re-sort the queue: a merge may have unblocked an issue.
 
 ## 2. Write a prompt issue
 
@@ -131,4 +138,4 @@ For a written plan with numbered tasks (and usually a spec beside it) that shoul
 - `references/worker-brief.md`: the brief each agent gets.
 - `references/after-merge.md`: restacking, conflict checks, shallow-clone repair.
 - `references/example-harmony.md`: the 2026-11-12 run and the dry-run plan for #30 to #33.
-- `scripts/scan_queue.py`, `scripts/ci_state.py`: run them; read them only to change them.
+- `scripts/scan_queue.py`, `scripts/ci_state.py`, `scripts/landed.py`: run them; read them only to change them.

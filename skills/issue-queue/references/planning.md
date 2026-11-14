@@ -25,8 +25,10 @@ For each pair of runnable issues, decide which case it is. The question is alway
 | Case | Test | What to do |
 |---|---|---|
 | Disjoint | No file in common, or only files one of them creates | Same time, from `main`, no stack |
-| Append points only | The common files are lists both add to: a table row, a changelog bullet, a route or tool registration, a name in a registry, a numbered step | Same time, from `main`; stack the finished branches in merge order and resolve the appends once |
-| Same code | Both change the body of the same existing function, the same schema, the same config block; or one has `Builds on` the other | One lane, in order; the second starts from the first's finished branch |
+| Append points only | The common files are lists both add to, **one entry per line**: a table row, a changelog bullet, a route or tool registration, a name in a registry, a numbered step | Same time, from `main`; stack the finished branches in merge order and resolve the appends once |
+| Same code | Both change the body of the same existing function, the same schema, the same config block; both extend the same paragraph or the same one-line list; or one has `Builds on` the other | One lane, in order; the second starts from the first's finished branch |
+
+Open the shared spot and look at its shape before calling it an append point. Git merges two additions on different lines by itself and conflicts on two edits to the same line, so a sentence listing every flag, or an enum written on one line, conflicts once per branch however small each change is. One run resolved about twenty such conflicts by hand across seven branches, all from four spots of this kind. When three or more issues share such a spot, offer a prep PR first: one row or one item per line, and a heading per issue where each will add a section. It is a PR like any other; the run never writes to the default branch to prepare it.
 
 If you cannot tell whether a shared file is an append point or the same code, treat it as the same code. A lane that was not needed costs a few minutes; a parallel edit that was not safe costs a hand-merged conflict and a review that can't trust it.
 
@@ -34,6 +36,7 @@ A lane is a chain: `#12 → #13 → #15`. Lanes that share nothing run at the sa
 
 Collect, per runnable issue, the append points it will touch: what the issue names, plus what the repo's rules say changes together (for a new tool in an MCP server, for example: `server.py`, the README tool table, CHANGELOG `[Unreleased]`, the tool-name set in `tests/test_tools.py`, a HARDWARE_VALIDATION step, maybe `assumptions.py`). Two issues sharing any of these conflict after the first merge.
 
+- The merge order in the plan is provisional until every worker has reported. Reorder when the work says so: a branch that came back smaller than expected (documentation only, say) moves to the bottom, where it merges first and stops blocking the branches that were stacked on it. Slots already handed out keep their numbers. Say in the report that the order changed and why.
 - Stack when two or more runnable issues share an append point. Merge order: the smallest and most independent first, the one most likely to need review rework last (rework low in a stack forces restacking everything above it).
 - Hand out numbered slots in merge order: next free checklist step, next migration number. Write them into each worker's brief so no two branches write the same "step 10".
 - A single runnable issue needs no stack, but still check its append points against open PRs and against issues that will run later (they tell the owner where the next conflict will be).
@@ -69,7 +72,10 @@ All N PRs are open with CI green.
 |---|---|---|---|
 | #34 | ... | the decision taken on X (and why) | ... or "nothing: no hub behaviour" |
 
-**Merge order:** #34, then #35 (stacked on #34; use merge commits, not squash). Reply "merged" and I'll restack what's left and re-check CI.
+**To merge** (every PR targets `main`):
+1. Merge #34 with a merge commit (not squash).
+2. Reply "merged". I check it landed on `main`, rebase #35 onto it and re-read CI.
+3. Merge #35 the same way.
 **Still held:** #31 (needs you at home), #30 (after #31 settles H-FIXIT), #33 (your call: ...).
 ```
 
