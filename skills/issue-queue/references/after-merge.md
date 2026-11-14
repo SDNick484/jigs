@@ -1,5 +1,15 @@
 # Restacking, conflicts, and after "merged"
 
+## First: did it land?
+
+```sh
+python3 scripts/landed.py OWNER/REPO <PR> [<PR> ...]     # every PR the owner says they merged
+```
+
+Go on only when every line says `LANDED`. `NOT_ON_DEFAULT` means the PR was merged into another PR's branch: GitHub shows "merged" and the default branch has none of it. Say which PR, and offer the repair: find the branch that holds the merged work (`git branch -r --contains <merge commit>`) and open a PR from it into the default branch. When the merges are spread over several branches, one PR per branch, lowest in the stack first. `WRONG_BASE` on a PR that is still open is the same mistake before it happens: retarget it with `gh api -X PATCH repos/OWNER/REPO/pulls/<N> -f base=<default branch>` and tell the owner.
+
+One run merged a stack of PRs into each other this way before anyone noticed. This check makes it one command to see.
+
 ## Before any rebase: deepen
 
 The push recipe in some hosted sessions ends with `git fetch --depth=1 origin <branch>`. That makes the branch tip a shallow boundary, so a later rebase finds no common ancestor and reports **every file** as an add/add conflict. If a rebase shows conflicts in files the branch never touched, this is why. Abort and deepen:
