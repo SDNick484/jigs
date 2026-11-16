@@ -19,6 +19,15 @@ git remote add origin <url> && git push -u origin main      # only when the owne
 
 Before the commit, in a public repository: read both documents for personal names, domains, hostnames and addresses, and replace them with placeholders. A design written in conversation carries details a public repo should not. The private originals stay wherever they were written.
 
+### When the repository already has commits (existing repo, new plan)
+
+In an existing repository (`default branch: main`), the skill never commits directly to `main` (the seeding exception is only for `default branch: none`). If the spec and plan were just written locally and are not on `origin/main` yet, citing `docs/plans/<plan>.md` in an issue will make `scan_queue.py` flag `cited but not on main: docs/plans/<plan>.md` and stop Step 1a. Handle an existing repo in one of two ways:
+
+1. **Commit the spec and plan in the first issue** (the scaffold or first task PR), and have the issues that cite the plan declare `Builds on: #1` so their worktrees branch from #1 and have the file; or
+2. **Write self-contained prompt issues** (`references/issue-format.md`) that carry their own "What to build" and "Tests and docs" sections without citing the uncommitted plan path.
+
+Also check whether the existing repository already has CI and a verification gate (`ci_state.py OWNER/REPO ref:main`): if it reports `NO_CI` or lacks a reproducible dependency file (`pyproject.toml`, `requirements-dev.txt`) and rules file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), keep Task 1 as the scaffold issue just as in a new repo.
+
 ## Until the scaffold task merges
 
 The seeded repository has no rules file, no gate and no CI. The first task of a plan normally creates all three.
