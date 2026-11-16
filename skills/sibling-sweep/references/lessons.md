@@ -20,6 +20,8 @@ The installer fix went to five repositories. A sixth had the same installer, wri
 
 The same probe for the shutdown wave shows nine repositories DONE and one, created the day before the wave under a different name, still TODO.
 
+The first live run of this skill repeated the mistake in a new form. Asked to sync shared code, it took the family to be five repositories without probing, reported "all five match", and stated that three other repositories had no lock file. They had one, pinned to the same commit as the five; a fourth and a differently named fifth were not mentioned at all, and the fifth was three shared modules behind. The probe was never run across the whole account. Hence the wording of step 3: candidates come from a listing made at run time, and nothing is said about a repository the probe did not read.
+
 ## Pilot first
 
 In the remediation wave every one of the six repositories on its main branch name needed a follow-up commit to get CI green, for overlapping reasons: a smoke test that still called a tool by its old name, the formatter, and the shared-file drift check. Each was discovered separately, six times. Running one repository to green first turns that into one discovery and five briefs that already contain it.

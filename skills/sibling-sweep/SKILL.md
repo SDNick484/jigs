@@ -55,11 +55,13 @@ python3 scripts/sweep_status.py --root <dir with every checkout> \
     --anchor '<glob>' (--has '<regex>' | --lacks '<regex>') [--marker <file that marks membership>]
 ```
 
-Clone or fetch every repository the owner could mean into one directory first (one git operation at a time), default branch, up to date. Then:
+The candidates are **every repository the owner has**, taken from a listing made now (`gh repo list OWNER --limit 200`, or the session's own repository list), minus forks and archived ones. Never a list from memory, from notes, or from a document, including the shared repository's own list of its members: those are how a family of nine gets swept as five. Clone or fetch each candidate into one directory (one git operation at a time), default branch, up to date. With many repositories, a shallow clone is enough for the probe. Then:
 
 - Every repository gets a row. `TODO` and `PARTIAL` are the work; `DONE` is "already has it"; `N/A` is "nothing to apply it to". A hand-kept list is how a wave reaches five repositories out of six.
 - `PARTIAL` means one repository has several files the change applies to and only some have it. Each file is its own piece of work.
 - `--marker` shows membership without filtering: a member whose name doesn't fit the usual pattern, and a non-member that has the anchor file, both show up. Whether those are in or out is the owner's decision; put it in the plan as a question.
+- Say nothing about a repository that the probe did not read. "Has no lock file" or "isn't part of the family" is a claim about a file: it comes from a row in the probe's output, not from a description of the repository.
+- For a change to shared code (step 2), run the probe before the sync tool, with the lock or manifest file as both `--marker` and `--anchor` and the new source commit as `--has`. Every member not at that commit is TODO whatever it is called and whether or not the tool would find it. If the sync changes no files in a member and only moves its pin, that is still a row: report it as "pin only" and let the owner decide whether pin-only PRs are wanted.
 - A repository with an open PR that already makes this change is in progress, not TODO: `gh api "repos/OWNER/REPO/pulls?state=open"` and look for the sweep's branch name.
 
 Then check each default branch with `python3 scripts/ci_state.py OWNER/REPO ref:<default branch>`. A red default branch fails that repository's PR for a reason that is not the sweep's: hold that repository and say so.
