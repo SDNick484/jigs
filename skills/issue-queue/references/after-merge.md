@@ -1,9 +1,11 @@
 # Restacking, conflicts, and after "merged"
 
-## First: did it land?
+## First: read the ledger and check that the merge landed
+
+Read `<clone>/.worktrees/queue-state.md` to restore the active stack, branch names, and merge order, then verify every PR the owner says they merged:
 
 ```sh
-python3 scripts/landed.py OWNER/REPO <PR> [<PR> ...]     # every PR the owner says they merged
+python3 <skill-dir>/scripts/landed.py OWNER/REPO <PR> [<PR> ...]     # every PR the owner says they merged
 ```
 
 Go on only when every line says `LANDED`. `NOT_ON_DEFAULT` means the PR was merged into another PR's branch: GitHub shows "merged" and the default branch has none of it. Say which PR, and offer the repair: find the branch that holds the merged work (`git branch -r --contains <merge commit>`) and open a PR from it into the default branch. When the merges are spread over several branches, one PR per branch, lowest in the stack first. `WRONG_BASE` on a PR that is still open is the same mistake before it happens: retarget it with `gh api -X PATCH repos/OWNER/REPO/pulls/<N> -f base=<default branch>` and tell the owner.
@@ -54,6 +56,8 @@ git diff origin/main -- <file>                  # after: read every conflicted r
 Then run the full gate (not only the touched tests), and `ci_state.py` after the push.
 
 ## After "merged": the two-line report
+
+Update `<clone>/.worktrees/queue-state.md` with the `MERGED` PR and the new `Base` / `Head` SHAs of the rebased branches, then report:
 
 ```
 #26 is in main. #27 and #28 are rebased on it, the gate passes on both, and CI is green on both. Next to merge: #27.
