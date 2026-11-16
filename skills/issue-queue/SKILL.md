@@ -86,7 +86,7 @@ Independent lanes run at the same time.
 
 ### 1d. Show the plan, then go
 
-Post the plan in the format in `references/planning.md`: order, model per issue, groups with reasons, lanes, expected conflicts, numbers handed out, merge order. If nothing in it needs the owner's answer, start immediately and say so; they can stop it. If something does (an ambiguous dependency, a stack they might not want), ask one question and wait.
+Post the plan in the format in `references/planning.md`: order, native model per issue (translated to your active platform if the issue names another platform's model), groups with reasons, lanes, expected conflicts, numbers handed out, merge order. If nothing in it needs the owner's answer, start immediately and say so; they can stop it. If something does (an ambiguous dependency, a stack they might not want), ask one question and wait.
 
 ### 1e. Run
 
@@ -116,7 +116,7 @@ Follow `references/after-merge.md`: first run `python3 <skill-dir>/scripts/lande
 ## 2. Write a prompt issue
 
 1. Read the queue (`scan_queue.py`) and the repo rules (step 0), so the new issue knows its neighbours.
-2. Draft it with the template in `references/issue-format.md`: the opening line, `**Suggested model:**` with a reason, the header lines, Goal, Why, what's already there to build on, what to build, tests and docs, Done when.
+2. Draft it with the template in `references/issue-format.md`: the opening line, `**Suggested model:**` using your active platform's native model name (`Gemini Pro` / `Gemini Flash` / `Gemini Flash-Lite` in Antigravity, `Opus` / `Sonnet` / `Haiku` in Claude Code, `gpt-5.4 (high/medium)` / `gpt-5.4-mini (low)` in OpenAI Codex) with a reason, the header lines, Goal, Why, what's already there to build on, what to build, tests and docs, Done when.
 3. Fill `**Runs after:**` and `**Needs the owner:**` honestly. If the new issue rests on something another open issue might overturn, that is a dependency; name it on both sides.
 4. Reserve shared numbers in `**Reserves:**` only as a suggestion; the queue run hands out the final ones.
 5. Show the owner the draft. Create it (`gh api repos/OWNER/REPO/issues -f title=... -f body=@file`) when they say so, or straight away if they asked to "file" or "add" it. Public repos: no addresses, account names or hostnames in the body.
