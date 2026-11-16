@@ -27,7 +27,7 @@ When it stops early, it says which issue, which step, the exact command and outp
 
 ## 0. Read the rules first, every run
 
-Read the repo's `CLAUDE.md`, `CONTRIBUTING.md`, PR template, and the project instructions. Write down, for this run:
+Read the repo's agent rules file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), `CONTRIBUTING.md`, PR template, and the project instructions. Write down, for this run:
 
 - the verification gate (the exact commands CI runs; e.g. `pytest && ruff check . && ruff format --check . && mypy && python scripts/sync_shared.py --check`);
 - which files are shared or generated and must not be edited;
@@ -40,9 +40,11 @@ Where these disagree with this skill, the repo wins. They are why the skill work
 
 ### 1a. Gather facts
 
+The helper scripts live in `scripts/` inside this skill's directory (not in the target repository). Resolve `<skill-dir>` to the directory holding this `SKILL.md`:
+
 ```sh
-python3 scripts/scan_queue.py OWNER/REPO          # prompts, headers, #refs with state, owner/publish hints, overlaps
-python3 scripts/ci_state.py OWNER/REPO ref:main   # is main green? a red main fails every worker's gate
+python3 <skill-dir>/scripts/scan_queue.py OWNER/REPO          # prompts, headers, #refs with state, owner/publish hints, overlaps
+python3 <skill-dir>/scripts/ci_state.py OWNER/REPO ref:main   # is main green? a red main fails every worker's gate
 ```
 
 Then run the repo's gate yourself, on an untouched checkout of the default branch, set up the way a worker's worktree will be. CI being green says the code is fine; it does not say this machine can run the gate. A missing tool (a display server, a compiler, a browser) shows up here once, not in every worker. Count a test that was skipped because something is missing as not run: if the gate skips tests CI runs, stop and say what is missing.
@@ -88,7 +90,7 @@ Post the plan in the format in `references/planning.md`: order, model per issue,
 
 ### 1e. Run
 
-One agent per issue, started as soon as its lane allows, on the model in the issue's `**Suggested model:**` line (the first one named), each in its own git worktree with its own virtualenv. Write the rules every worker shares to one file and give each agent that file's path plus its own short brief (`references/worker-brief.md`); repeating the rules in every brief costs the same text once per worker. Everything a worker writes outside git (logs, the PR body) goes under its own worktree: a shared scratch folder lets one worker's gate log overwrite another's. Its rules come from the hand run's failures: a shared editable install testing the wrong checkout, shallow clones breaking rebases, and a git proxy that allows two concurrent operations per repo.
+One agent per issue, started as soon as its lane allows, mapped from the issue's `**Suggested model:**` line (the first one named) to your active harness (`references/worker-brief.md` has the exact tool calls, model mapping, worktree paths, and waiting rules for Claude Code, Antigravity, and OpenAI Codex), each in its own git worktree under `<clone>/.worktrees/<slug>` with its own virtualenv. Write the rules every worker shares to `<clone>/.worktrees/shared-rules.md` and give each agent that file's path plus its own short brief (`references/worker-brief.md`); repeating the rules in every brief costs the same text once per worker. Everything a worker writes outside git (logs, the PR body) goes under `<worktree>/.queue/`: a shared scratch folder lets one worker's gate log overwrite another's. Its rules come from the hand run's failures: a shared editable install testing the wrong checkout, shallow clones breaking rebases, and a git proxy that allows two concurrent operations per repo.
 
 An issue that stacks on another starts when that one's worker has handed back its branch, in a worktree based on that branch. Lanes that share nothing run at the same time.
 
@@ -96,12 +98,12 @@ The orchestrator does all clones, fetches and pushes **one at a time**. Workers 
 
 ### 1f. Verify CI yourself
 
-For each PR, run `scripts/ci_state.py OWNER/REPO <PR>` until it is not `PENDING`.
+For each PR, run `python3 <skill-dir>/scripts/ci_state.py OWNER/REPO <PR>` until it is not `PENDING` (wait 30–60s between checks using your harness's timer or backoff—in Antigravity, use the `schedule` tool with `DurationSeconds` and end the turn, never a shell `sleep` loop; see `references/worker-brief.md`).
 
 - `GREEN`: done.
 - `REQUEUE`: a job was cancelled before any step ran (a runner queue problem, seen twice on 2026-11-12 on `wheel-smoke (macos-latest)`). Re-run it once with `--rerun-queued`. It is neither a pass nor a failure.
 - `FAILED` on a commit where the same check passed before, with no code change between: that is a finding, not a retry. A test that passes and then fails is telling you about a race or an ordering dependency. Read the failure, and either fix it or name it in the report; never re-run until green and move on.
-- `FAILED`: read the log, fix on the branch (or send the worker back), run the gate, push, check again. After a fix on a stacked branch, the branches above it need restacking.
+- `FAILED`: read the log, fix on the branch (or resume the worker with the failure log per `references/worker-brief.md`), run the gate, push, check again. After a fix on a stacked branch, the branches above it need restacking.
 
 ### 1g. Report once
 
@@ -109,7 +111,7 @@ When every started PR is `GREEN` (or definitively stuck), send one message: the 
 
 ### 1h. When the owner says "merged"
 
-Follow `references/after-merge.md`: first run `scripts/landed.py OWNER/REPO <PR>...` on what was merged, and stop on anything but `LANDED` (a PR can be merged without reaching the default branch); then deepen the clone, rebase what is left onto the new `main`, resolve conflicts, run the full gate, look at every table and list literal a conflict touched, push with `--force-with-lease`, re-check CI, and report in two lines. Re-sort the queue: a merge may have unblocked an issue.
+Follow `references/after-merge.md`: first run `python3 <skill-dir>/scripts/landed.py OWNER/REPO <PR>...` on what was merged, and stop on anything but `LANDED` (a PR can be merged without reaching the default branch); then deepen the clone, rebase what is left onto the new `main`, resolve conflicts, run the full gate, look at every table and list literal a conflict touched, push with `--force-with-lease`, re-check CI, and report in two lines. Re-sort the queue: a merge may have unblocked an issue.
 
 ## 2. Write a prompt issue
 

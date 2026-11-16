@@ -59,7 +59,7 @@ COMMON = {"main", "master", "develop", "HEAD"}
 # worker is told to read: a spec or a plan. If it is not on the default branch, no worker
 # can read it. It can also be a document the issue will create, so this is a hint.
 CITED_DOC = re.compile(r"(?<![\w./-])((?:[\w.-]+/)+[\w.-]+\.md)\b")
-DOC_WORDS = re.compile(r"\b(README|CHANGELOG|CLAUDE\.md|HARDWARE_VALIDATION|CONTRIBUTING)\b")
+DOC_WORDS = re.compile(r"\b(README|CHANGELOG|CLAUDE\.md|AGENTS\.md|GEMINI\.md|HARDWARE_VALIDATION|CONTRIBUTING)\b")
 
 
 def parse_pages(out: str) -> object:

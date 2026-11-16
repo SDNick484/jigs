@@ -1,15 +1,15 @@
 # Worker brief
 
-Each runnable issue gets one agent, on the issue's suggested model. The orchestrator creates the worktree and venv first (git operations one at a time), so the worker never clones or pushes.
+Each runnable issue gets one agent, mapped from the issue's suggested model to the active harness. The orchestrator creates the worktree and venv first (git operations one at a time), so the worker never clones or pushes.
 
-The brief is in two parts. What every worker in the run shares is written once to a file; each worker is sent only the path to it and the lines about its own issue. In one run of seven workers the shared rules were about sixty lines repeated seven times.
+The brief is in two parts. What every worker in the run shares is written once to `<clone>/.worktrees/shared-rules.md`; each worker is sent only the path to it and the lines about its own issue. In one run of seven workers the shared rules were about sixty lines repeated seven times.
 
-## Part 1: the run's shared rules (one file, written once)
+## Part 1: the run's shared rules (one file, written once to `<clone>/.worktrees/shared-rules.md`)
 
 ```text
 Rules for every worker in this run of <OWNER/REPO>. Read all of this before starting.
 
-Repo rules (from CLAUDE.md, CONTRIBUTING.md; they win over this file):
+Repo rules (from CLAUDE.md, AGENTS.md, GEMINI.md, CONTRIBUTING.md; they win over this file):
 - Gate: <exact commands>
 - Do not edit: <shared/generated files>. If your issue seems to need it, stop and report.
 - Changes together with a feature: <README row, CHANGELOG [Unreleased], TOOL_NAMES, ...>
@@ -38,19 +38,26 @@ Do:
 
 ```text
 You are implementing issue #<N> in <OWNER/REPO>: "<title>".
-First read the run's rules: <path to the shared file>. Then the issue body, in full:
+First read the run's rules: <clone>/.worktrees/shared-rules.md. Then the issue body, in full:
   gh api repos/<OWNER/REPO>/issues/<N> -q .body
 
-- Worktree: <path>, branch <branch>, based on <main | branch-of-#M (same lane: #M's commits are below
-  yours; don't touch #M's changes)>.
+- Worktree: <clone>/.worktrees/<slug>, branch <branch>, based on <main | branch-of-#M (same lane: #M's
+  commits are below yours; don't touch #M's changes)>.
 - Assigned by the queue (use these, not the numbers in the issue): <HARDWARE_VALIDATION step 14>
 - <anything that applies to this issue only>
 ```
 
 ## Orchestrator setup per worker
 
+Place every worktree inside the repository at `<clone>/.worktrees/<slug>` (where `<slug>` is a short kebab-case name for the issue, e.g. `issue-12-rate-limit` or `rate-limit`). Keeping worktrees under `<clone>/.worktrees/` ensures workers stay inside workspace sandbox boundaries across harnesses.
+
 ```sh
-# one at a time
+# once per run, exclude .worktrees/ from git in the main checkout
+mkdir -p <clone>/.worktrees
+grep -qxF ".worktrees/" "$(git -C <clone> rev-parse --git-path info/exclude)" || \
+  echo ".worktrees/" >> "$(git -C <clone> rev-parse --git-path info/exclude)"
+
+# one worker at a time (<path> is <clone>/.worktrees/<slug>)
 git -C <clone> fetch --depth=50 origin main
 git -C <clone> worktree add -b <branch> <path> origin/main          # or <base-branch> when stacked
 python3 -m venv <path>/.venv
@@ -63,7 +70,19 @@ Install what the repo's CI job installs, read from its workflow or CONTRIBUTING.
 
 The last line is the check that the venv tests this worktree's code and not another checkout's; it applies when the repo is an installable package. If it prints any other path, the editable install went to the wrong place; fix it before starting the worker. For an app run from its directory there is nothing to import-check: run the gate from `<path>`.
 
-Branch names: `claude/<repo-short>-<slug>` (the hand run used `claude/harmony-sleep-timer`), unless the repo's rules say otherwise.
+Branch names: `<harness>/<repo-short>-<slug>` (`claude/<repo-short>-<slug>` in Claude Code, `agy/<repo-short>-<slug>` in Antigravity, `codex/<repo-short>-<slug>` in OpenAI Codex, where `<repo-short>` is the repository name without a common prefix like `mcp-server-`, or the full repo name if none), unless the repo's rules say otherwise.
+
+## Harness adaptation (dispatching, model mapping, waiting, resuming)
+
+Detect your active harness from your declared tool list (`Agent` = Claude Code, `invoke_subagent` = Antigravity, `spawn_agent` = OpenAI Codex) and follow the matching column:
+
+| Action | Claude Code | Antigravity (`agy`) | OpenAI Codex |
+|---|---|---|---|
+| **Dispatch worker (Step 1e)** | `Agent` tool (`prompt`: Part 2 brief; launch parallel lanes in a single response) | `invoke_subagent(TypeName="self", Workspace="inherit", Role="Issue #<N> Worker", Prompt=<Part 2 brief>, Model=<mapped>)` (always `Workspace="inherit"` because the worktree already exists at `<clone>/.worktrees/<slug>`) | `spawn_agent` with `{fork_turns: "none", message: <Part 2 brief>, model: <mapped>, reasoning_effort: <mapped>}` |
+| **Map `**Suggested model:**`** | **Opus / heavy** → `opus`<br>**Sonnet / standard** → `sonnet`<br>**Haiku / fast** → `haiku` | **Opus / heavy** → `"pro"`<br>**Sonnet / standard** → `"flash"` (or `"inherit"`)<br>**Haiku / fast** → `"flash_lite"` | Pick from current spawn allowlist and set both `model` and `reasoning_effort`:<br>**Opus / heavy** → `reasoning_effort: "high"`<br>**Sonnet / standard** → `reasoning_effort: "medium"`<br>**Haiku / fast** → `reasoning_effort: "low"` (mini/fast preset if allowlisted) |
+| **Wait for workers** | Wait on tool return or background agent completion notification | **Reactive wakeup**: after invoking the lane's subagents, end your turn (call no more tools). The system automatically wakes you when each worker finishes and replies. Never poll. | Call `wait_agent` in bounded stretches (`timeout_ms`: `300000`–`600000`, 5–10 min); never poll with short timeouts |
+| **Resume worker on CI failure (Step 1f)** | Resume the worker agent with the failure log (or dispatch a fresh `Agent` on the same worktree) | `send_message(Recipient="<conversationId>", Message=<CI failure log and instructions>)` and end turn to wait for reply | `followup_task` targeting the worker's agent ID with the CI failure log |
+| **Wait on `ci_state.py` `PENDING` (Step 1f)** | Wait 30–60s between checks | Call `schedule(DurationSeconds=45, Prompt="Re-run ci_state.py OWNER/REPO <PR>")` and **end your turn** (never use a shell `sleep` command as a timer) | Wait 30–60s between checks |
 
 ## Opening the PR
 
