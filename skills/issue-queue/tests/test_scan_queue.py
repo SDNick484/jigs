@@ -55,6 +55,13 @@ class Patterns(unittest.TestCase):
         self.assertEqual(scan_queue.HEADER["runs_after"].search(body).group(1).strip(), "#31 (why)")
         self.assertEqual(scan_queue.HEADER["needs_owner"].search(body).group(1).strip(), "no")
 
+    def test_doc_words_match_agent_rules_files_across_harnesses(self):
+        body = "Updates README, CHANGELOG, CLAUDE.md, AGENTS.md, and GEMINI.md."
+        self.assertEqual(
+            set(scan_queue.DOC_WORDS.findall(body)),
+            {"README", "CHANGELOG", "CLAUDE.md", "AGENTS.md", "GEMINI.md"},
+        )
+
 
 class FakeGh:
     """Answers scan_queue.gh(path). `tree` is the set of paths on the default branch, or None

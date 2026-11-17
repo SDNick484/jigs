@@ -14,7 +14,7 @@ Labels were the other option. They are good for filtering but carry no reason an
 ## Template
 
 ```markdown
-This issue is a prompt for a new Claude session. Paste it, or say "work the issue queue in <repo>".
+This issue is a prompt for a fresh agent session. Paste it, or say "work the issue queue in <repo>".
 
 **Suggested model:** <model>. <one-line reason>
 **Runs after:** <none | #N (why: what it must settle first)>
@@ -35,7 +35,7 @@ This issue is a prompt for a new Claude session. Paste it, or say "work the issu
 <the design, decisions already made, refusal cases>
 
 ## Tests and docs
-<what to test; which docs change, per the repo's CLAUDE.md>
+<what to test; which docs change, per the repo's agent rules file (CLAUDE.md, AGENTS.md, GEMINI.md)>
 
 ## Done when
 The PR is open with the verification gate and CI green, and its description lists the decisions made, any deviation from this prompt, and what is unverified on hardware.
@@ -45,9 +45,13 @@ Rules for the header:
 
 - `Runs after` names issues by number with the reason, and is written on **both** sides: if #31 can overturn #30, #31 also says so in prose ("If X, #30 needs rethinking") so a reader of either finds the other.
 - `Builds on` is for code, `Runs after` is for outcomes. "Uses the session cookie #13 adds" is `Builds on: #13`: the queue starts this issue from #13's branch without waiting for a merge. "#31 decides whether this design survives" is `Runs after: #31`: the queue holds it. Writing a code dependency as `Runs after` is safe but serialises the whole plan behind the owner's merges.
-- Name the files the issue creates and the existing files it edits, under "What to build". The planner uses them to decide what can run at the same time.
+- Name the files the issue creates and the existing files it edits, under "What to build". The planner uses them to decide what can run at the same time. Name only the files this issue touches—never list another lane's files to say "do not edit X", because `scan_queue.py` extracts every filename in the body to compute pairwise overlaps.
 - `Needs the owner: at the end` means the session can run to the PR and stop there (for example a release PR whose tag push needs the owner). `before starting` means the queue holds it.
-- Model choice: Opus for a new subsystem, safety-relevant refusals or tricky concurrency; Sonnet for well-bounded work, checklists and mechanical releases; Haiku only for small edits a test proves. Name one model first; an alternative after "or".
+- Model choice: write `**Suggested model:**` using **your active platform's native model name** for the task's capability tier (never default to Claude model names when running in Antigravity or Codex):
+  - **Heavy tier** (a new subsystem, safety-relevant refusals, or tricky concurrency): `Gemini Pro` (`pro`) in Antigravity · `Opus` in Claude Code · `gpt-5.4 (high)` in OpenAI Codex.
+  - **Standard tier** (well-bounded feature work, checklists, and mechanical releases): `Gemini Flash` (`flash`) or `Gemini Pro` (`pro`) in Antigravity · `Sonnet` in Claude Code · `gpt-5.4 (medium)` in OpenAI Codex.
+  - **Fast tier** (small edits or mechanical scaffolds a test proves): `Gemini Flash-Lite` (`flash_lite`) or `Gemini Flash` (`flash`) in Antigravity · `Haiku` in Claude Code · `gpt-5.4-mini (low)` in OpenAI Codex.
+  Name one model first; an alternative after "or". When an existing issue in the queue names another platform's model, the queue run translates it to the active platform's native equivalent (`references/worker-brief.md`).
 
 ## Changes to #30 to #33 under this format
 
