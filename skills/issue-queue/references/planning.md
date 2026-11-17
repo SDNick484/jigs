@@ -43,17 +43,17 @@ Collect, per runnable issue, the append points it will touch: what the issue nam
 
 ## Plan format (posted before starting)
 
-In the `Model` column (and `Starting now:`), always display **your active platform's native equivalent model** (`Gemini Pro` / `Gemini Flash` / `Gemini Flash-Lite` in Antigravity, `Opus` / `Sonnet` / `Haiku` in Claude Code, `gpt-5.4 (high/medium)` / `gpt-5.4-mini (low)` in OpenAI Codex), translating any cross-platform model name from the issue's `**Suggested model:**` line per `references/worker-brief.md`:
+The `Model` column shows the issue's tier and, in brackets, the model your harness file gives for it on this run:
 
 ```markdown
 **Queue plan for OWNER/REPO** (main is GREEN at abc1234; planned from the prose for #30-#33: no header lines)
 
 | # | Issue | Group | Model | Why |
 |---|---|---|---|---|
-| 32 | stop `call` adding history noise | run now | <native standard model> | no dependency, no owner step |
-| 31 | hardware validation 10-13 | needs the owner | <native standard model> | needs you at home with the remotes; brings 2 decisions back |
-| 30 | harmony_fix_device | blocked on #31 | <native heavy model> | rests on H-FIXIT, which #31 checks |
-| 33 | release 0.4.0 | needs the owner, last | <native standard model> | publishes; question below |
+| 32 | stop `call` adding history noise | run now | standard (<model>) | no dependency, no owner step |
+| 31 | hardware validation 10-13 | needs the owner | standard (<model>) | needs you at home with the remotes; brings 2 decisions back |
+| 30 | harmony_fix_device | blocked on #31 | heavy (<model>) | rests on H-FIXIT, which #31 checks |
+| 33 | release 0.4.0 | needs the owner, last | standard (<model>) | publishes; question below |
 
 **Lanes:** <#32 alone | A: #12 → #13 and #14 (both start when #12 commits) · B: #16, at the same time as A>
 **Collisions:** <none among runnable | list of shared append points and the stack order>

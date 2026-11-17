@@ -21,7 +21,7 @@ Before the commit, in a public repository: read both documents for personal name
 
 ### When the repository already has commits (existing repo, new plan)
 
-In an existing repository (`default branch: main`), the skill never commits directly to `main` (the seeding exception is only for `default branch: none`). If the spec and plan were just written locally and are not on `origin/main` yet, citing `docs/plans/<plan>.md` in an issue will make `scan_queue.py` flag `cited but not on main: docs/plans/<plan>.md` and stop Step 1a. Handle an existing repo in one of two ways:
+In an existing repository (`default branch: main`), the skill never commits directly to `main` (the seeding exception is only for `default branch: none`). If the spec and plan were just written locally and are not on `origin/main` yet, citing `docs/plans/<plan>.md` in an issue will make `scan_queue.py` flag `cited but not on main: docs/plans/<plan>.md` and stop step 1a. Handle an existing repo in one of two ways:
 
 1. **Commit the spec and plan in the first issue** (the scaffold or first task PR), and have the issues that cite the plan declare `Builds on: #1` so their worktrees branch from #1 and have the file; or
 2. **Write self-contained prompt issues** (`references/issue-format.md`) that carry their own "What to build" and "Tests and docs" sections without citing the uncommitted plan path.

@@ -2,7 +2,7 @@
 
 ## First: read the ledger and check that the merge landed
 
-Read `<clone>/.worktrees/queue-state.md` to restore the active stack, branch names, and merge order, then verify every PR the owner says they merged:
+Read the ledger (`<clone>/.worktrees/queue-state.md`) for the stack, the branch names and the merge order, then check every PR the owner says they merged:
 
 ```sh
 python3 <skill-dir>/scripts/landed.py OWNER/REPO <PR> [<PR> ...]     # every PR the owner says they merged
@@ -57,7 +57,7 @@ Then run the full gate (not only the touched tests), and `ci_state.py` after the
 
 ## After "merged": the two-line report
 
-Update `<clone>/.worktrees/queue-state.md` with the `MERGED` PR and the new `Base` / `Head` SHAs of the rebased branches, then report:
+Set the merged row's stage to `merged` in the ledger, and change "Started from" on each branch that was rebased onto the default branch. Then report:
 
 ```
 #26 is in main. #27 and #28 are rebased on it, the gate passes on both, and CI is green on both. Next to merge: #27.

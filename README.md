@@ -16,8 +16,21 @@ skills/
 ```
 
 One directory per skill. Each is self-contained: copy `skills/<name>/` into your skills directory
-(for Claude Code, `~/.claude/skills/` or a project's `.claude/skills/`) and it works without the
-rest of this repo.
+and it works without the rest of this repo.
+
+| Harness | Skills directory |
+|---|---|
+| Claude Code | `~/.claude/skills/`, or a project's `.claude/skills/` |
+| Antigravity | a workspace's `.agents/skills/` |
+| OpenAI Codex | `~/.agents/skills/` |
+
+These paths change between versions; your harness's documentation has the current ones, and the
+one for skills shared across all your projects.
+
+`issue-queue` runs in all three. Its procedure is written in action words (dispatch a worker,
+resume it, wait), and `skills/issue-queue/references/harnesses/` has one short file per harness
+saying how each is done there. In a harness with no way to start a subagent it works the queue
+one issue at a time. `hardware-run` and `sibling-sweep` have been run in Claude Code only.
 
 ## Skills
 
@@ -72,6 +85,26 @@ Three requests, in order. Each stops and shows you something before it changes a
 3. **Merge, then say "merged".** It rebases what is left, re-reads CI and starts anything the
    merge unblocked. Use merge commits for stacked pull requests, not squash.
 
+### issue-queue in Antigravity: approvals
+
+By default Antigravity asks you to approve each shell command that is not on its allowlist, and a
+queue run issues many of them from several workers at once. A worker waiting for an approval
+holds up its lane. Two ways to let a run through:
+
+- **Set the project's execution policy** to run commands in the sandbox, or to always proceed.
+  Workers stay inside `<clone>/.worktrees/` and never push or merge; only the orchestrator pushes
+  and opens pull requests.
+- **Or keep approvals and allowlist the routine prefixes**, so you are still asked before a push
+  or a new pull request:
+  - `python3`, `.venv/bin/python`, `.venv/bin/pip`
+  - `git status`, `git log`, `git diff`, `git fetch`, `git worktree`, `git checkout`,
+    `git rebase`, `git merge --ff-only`, `git add`, `git commit`, `git rev-parse`
+  - `mkdir -p`, `grep -qxF`, and `gh api repos/` if you are happy for reads to go unasked
+  - the target repository's own gate tools (`pytest`, `ruff`, `mypy` and so on)
+
+The skill writes its commands as `git -C <path> ...` and `<path>/.venv/bin/python -m ...` so
+they match by prefix. The setting names are Antigravity's as of November 2026.
+
 You don't write the header lines (`Builds on`, `Runs after`, `Needs the owner`) yourself. The
 skill derives them from the plan, so the plan is where to be precise. Per task:
 
@@ -97,7 +130,8 @@ And once, at the top of the plan:
 
 - **Generic.** Skills carry no hostnames, addresses, names or account details, and use
   placeholders such as `mcp.example.com` and `user@example.com`. Anything specific to one
-  repository belongs in that repository's own `CLAUDE.md`, which a skill reads when it runs.
+  repository belongs in that repository's own rules file (`CLAUDE.md`, `AGENTS.md` or `GEMINI.md`), which a skill
+  reads when it runs.
 - **Limits stated.** Every skill says what it never does without you (merge, tag, publish, send,
   delete, spend) and what it reports when it stops.
 - **Self-contained.** A script two skills need is copied into each. CI fails if the copies differ.
