@@ -27,7 +27,7 @@ When it stops early, it says which issue, which step, the exact command and outp
 
 ## 0. Read the rules first, every run
 
-Read the repo's agent rules file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), `CONTRIBUTING.md`, PR template, and the project instructions. Write down, for this run:
+Read the repo's agent rules file (`CLAUDE.md`, `AGENTS.md` or `GEMINI.md`, whichever it has), `CONTRIBUTING.md`, PR template, and the project instructions. Write down, for this run:
 
 - the verification gate (the exact commands CI runs; e.g. `pytest && ruff check . && ruff format --check . && mypy && python scripts/sync_shared.py --check`);
 - which files are shared or generated and must not be edited;
@@ -35,6 +35,18 @@ Read the repo's agent rules file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), `CONTR
 - how PRs are written (template, `Closes #N`, attribution lines).
 
 Where these disagree with this skill, the repo wins. They are why the skill works in sibling repos without edits: the skill knows the shape of the work, the repo knows its rules.
+
+### Find your harness
+
+The steps below say *dispatch a worker*, *resume a worker* and *wait*. How each is done depends on where you are running. Look at your own tool list and read the one file that matches:
+
+- an `Agent` tool: `references/harnesses/claude-code.md`
+- `invoke_subagent`: `references/harnesses/antigravity.md`
+- `spawn_agent`: `references/harnesses/codex.md`
+- another tool that starts a subagent: use it for the same actions, and name it in the plan.
+- no such tool: work the lanes yourself, one issue at a time in lane order, each in its own worktree and under the worker rules. The ledger, the pre-push check and the CI check stay as they are. Say in the plan that the run is sequential and why.
+
+Each file also gives the model for each tier, the branch prefix, and any lines to add to the workers' shared rules.
 
 ## 1. Work the queue
 
@@ -55,7 +67,7 @@ Three results stop the run before planning:
 
 - `scan_queue.py` prints `default branch: none`, or `ci_state.py` prints `NO_BRANCH`: the repo has no commits, so there is nothing to branch from. Say so and offer the seeding commit (section 3).
 - `scan_queue.py` prints `PR #N is opened against <branch>`: an open pull request targets something other than the default branch, so merging it will not land. Say so before planning around it; retarget it if this run opened it.
-- `scan_queue.py` prints `cited but not on <branch>` for a document the issue tells the worker to read (a spec, a plan). The issue's contract is missing. Say which document and offer to add it. The same line appears for a document the issue will create; read the sentence to tell which, and ignore that case.
+- `scan_queue.py` prints `cited but not on <branch>` for a document the issue tells the worker to read (a spec, a plan). The issue's contract is missing. Say which document and offer to add it. The same line appears for a document the issue will create, or one that arrives with an issue it `Builds on`; read the sentence to tell which, and ignore those cases.
 
 ### 1b. Sort the queue
 
@@ -86,24 +98,35 @@ Independent lanes run at the same time.
 
 ### 1d. Show the plan, then go
 
-Post the plan in the format in `references/planning.md`: order, native model per issue (translated to your active platform if the issue names another platform's model), groups with reasons, lanes, expected conflicts, numbers handed out, merge order. Write the initial on-disk queue ledger to `<clone>/.worktrees/queue-state.md` (`references/worker-brief.md`) so the run's lanes, worktrees, branches, worker IDs, SHAs, and PR states survive context compaction or a session restart. If nothing in the plan needs the owner's answer, start immediately and say so; they can stop it. If something does (an ambiguous dependency, a stack they might not want), ask one question and wait.
+Post the plan in the format in `references/planning.md`: order, tier and model per issue, groups with reasons, lanes, expected conflicts, numbers handed out, merge order. Write the queue ledger (`references/worker-brief.md`) before the first worker starts: it is how the run survives a compacted context or a new session. If nothing in the plan needs the owner's answer, start immediately and say so; they can stop it. If something does (an ambiguous dependency, a stack they might not want), ask one question and wait.
 
 ### 1e. Run
 
-One agent per issue, started as soon as its lane allows, mapped from the issue's `**Suggested model:**` line (the first one named) to your active harness (`references/worker-brief.md` has the exact tool calls, model mapping, worktree paths, waiting rules, and Antigravity permission/allowlist guidance for Claude Code, Antigravity, and OpenAI Codex), each in its own git worktree under `<clone>/.worktrees/<slug>` with its own virtualenv. Write the rules every worker shares to `<clone>/.worktrees/shared-rules.md`, save each worker's issue body to `<worktree>/.queue/ISSUE.md` during setup so the worker reads it with its native file tool instead of shelling out to `gh api`, and give each agent its short brief (`references/worker-brief.md`); repeating the rules in every brief costs the same text once per worker. Everything a worker writes outside git (logs, `ISSUE.md`, `PR_BODY.md`) goes under `<worktree>/.queue/`: a shared scratch folder lets one worker's gate log overwrite another's. Its rules come from the hand run's failures: a shared editable install testing the wrong checkout, shallow clones breaking rebases, and a git proxy that allows two concurrent operations per repo.
+One worker per issue, dispatched as soon as its lane allows, on the model your harness file gives for the issue's tier (`scan_queue.py` prints the tier). `references/worker-brief.md` has the setup commands and both parts of the brief.
 
-An issue that stacks on another starts when that one's worker has handed back its branch, in a worktree based on that branch. Lanes that share nothing run at the same time. Update `<clone>/.worktrees/queue-state.md` each time a worker is dispatched, finishes, or has its PR opened.
+- **Its own worktree and virtualenv**, at `<clone>/.worktrees/<slug>`: inside the clone, because some harnesses confine a worker to the workspace. The setup rules come from the hand run's failures: a shared editable install testing the wrong checkout, shallow clones breaking rebases, and a git proxy that allows two concurrent operations per repo.
+- **The shared rules written once**, to `<clone>/.worktrees/shared-rules.md`. Each worker gets that path and a short brief of its own; repeating the rules in every brief costs the same text once per worker.
+- **Its issue body saved for it**, at `<worktree>/.queue/ISSUE.md`, so no worker calls the API. Everything else a worker writes outside git (gate logs, `PR_BODY.md`) goes under the same `.queue/`: a shared scratch folder lets one worker's gate log overwrite another's.
 
-The orchestrator does all clones, fetches and pushes **one at a time**. Workers commit locally and hand back their branch. Before pushing any worker branch (or restacking onto it), the orchestrator runs the **pre-push scope and spec check** (`references/worker-brief.md`): inspect `git -C <worktree> diff --stat <base>..<branch>` and `<worktree>/.queue/PR_BODY.md` to verify that (1) no shared/generated or out-of-lane files were modified, (2) every required "changes together" file from Step 0 was updated, and (3) `PR_BODY.md` begins with `Closes #<N>` and lists decisions, deviations, and unverified items. If a check fails, resume the worker to fix it before restacking, running the gate on each restacked branch, pushing, and opening the PRs.
+An issue that stacks on another starts when that one's worker has handed back its branch, in a worktree based on that branch. Lanes that share nothing run at the same time. Update the ledger at every dispatch, hand-back and push.
+
+The orchestrator does all clones, fetches and pushes **one at a time**. Workers commit locally and hand back their branch. Before a branch is pushed, or another is started on top of it, check it:
+
+```sh
+python3 <skill-dir>/scripts/prepush_check.py <worktree> --base <what it started from> --issue <N> \
+    --forbid '<shared or generated files>' --other-lane '<files of parallel lanes>' --require '<changes-together files>'
+```
+
+A worker saying it is done is a claim. This is the check that it stayed in its lane and wrote the PR description, and staying in lane is what makes running lanes side by side safe. On `FAIL`, resume the worker with the output and check again. A `read:` line is yours to judge (`references/worker-brief.md`). Then restack if planned, run the gate on each restacked branch, push, and open the PRs.
 
 ### 1f. Verify CI yourself
 
-For each PR, run `python3 <skill-dir>/scripts/ci_state.py OWNER/REPO <PR>` until it is not `PENDING` (wait 30–60s between checks using your harness's timer or backoff—in Antigravity, use the `schedule` tool with `DurationSeconds` and end the turn, never a shell `sleep` loop; see `references/worker-brief.md`).
+For each PR, run `python3 <skill-dir>/scripts/ci_state.py OWNER/REPO <PR>` until it is not `PENDING`, waiting between checks the way your harness file says.
 
 - `GREEN`: done.
 - `REQUEUE`: a job was cancelled before any step ran (a runner queue problem, seen twice on 2026-11-12 on `wheel-smoke (macos-latest)`). Re-run it once with `--rerun-queued`. It is neither a pass nor a failure.
 - `FAILED` on a commit where the same check passed before, with no code change between: that is a finding, not a retry. A test that passes and then fails is telling you about a race or an ordering dependency. Read the failure, and either fix it or name it in the report; never re-run until green and move on.
-- `FAILED`: read the log, fix on the branch (or resume the worker with the failure log per `references/worker-brief.md`), run the gate, push, check again. After a fix on a stacked branch, the branches above it need restacking.
+- `FAILED`: read the log, fix on the branch (or resume the worker with the failure log), run the gate, push, check again. After a fix on a stacked branch, the branches above it need restacking.
 
 ### 1g. Report once
 
@@ -116,7 +139,7 @@ Follow `references/after-merge.md`: first run `python3 <skill-dir>/scripts/lande
 ## 2. Write a prompt issue
 
 1. Read the queue (`scan_queue.py`) and the repo rules (step 0), so the new issue knows its neighbours.
-2. Draft it with the template in `references/issue-format.md`: the opening line, `**Suggested model:**` using your active platform's native model name (`Gemini Pro` / `Gemini Flash` / `Gemini Flash-Lite` in Antigravity, `Opus` / `Sonnet` / `Haiku` in Claude Code, `gpt-5.4 (high/medium)` / `gpt-5.4-mini (low)` in OpenAI Codex) with a reason, the header lines, Goal, Why, what's already there to build on, what to build, tests and docs, Done when.
+2. Draft it with the template in `references/issue-format.md`: the opening line, `**Suggested model:**` as a tier (`heavy`, `standard` or `fast`, never a model name: the issue may be run from another harness) with a reason, the header lines, Goal, Why, what's already there to build on, what to build, tests and docs, Done when.
 3. Fill `**Runs after:**` and `**Needs the owner:**` honestly. If the new issue rests on something another open issue might overturn, that is a dependency; name it on both sides.
 4. Reserve shared numbers in `**Reserves:**` only as a suggestion; the queue run hands out the final ones.
 5. Show the owner the draft. Create it (`gh api repos/OWNER/REPO/issues -f title=... -f body=@file`) when they say so, or straight away if they asked to "file" or "add" it. Public repos: no addresses, account names or hostnames in the body.
@@ -125,9 +148,9 @@ Follow `references/after-merge.md`: first run `python3 <skill-dir>/scripts/lande
 
 For a written plan with numbered tasks (and usually a spec beside it) that should become a set of prompt issues. `references/plan-to-queue.md` has the detail and the two runs this comes from.
 
-1. **Check the repo can take work.** Run `scan_queue.py`. On `default branch: none`, offer one seeding commit to the default branch: the spec and the plan, nothing else. Workers branch from it and read their contract in it. In a public repo, remove personal names, domains and addresses from those copies first. Push it only when the owner says so (see Limits); until then, file nothing. In an **existing repo** where the spec and plan are newly drafted and not yet on the default branch, include committing the spec and plan in the first (scaffold) issue—or make each issue self-contained—so `scan_queue.py` does not halt the run on `cited but not on <branch>`.
+1. **Check the repo can take work.** Run `scan_queue.py`. On `default branch: none`, offer one seeding commit to the default branch: the spec and the plan, nothing else. Workers branch from it and read their contract in it. In a public repo, remove personal names, domains and addresses from those copies first. Push it only when the owner says so (see Limits); until then, file nothing. In a repo that already has commits, nothing is committed to the default branch directly: a plan that is not on it yet goes in with the first issue's PR, or each issue carries its own task text (`references/plan-to-queue.md`).
 2. **One issue per task, sized as one PR.** An issue is the unit that gets a branch, a CI run and a review. If two tasks are too small to review alone or cannot pass the gate separately, make them one issue now. Don't merge issues at run time: that loses `Closes #N` and per-issue CI.
-3. **Keep each issue short and point at the plan when the plan is on the branch.** "Implement Task 4 of `docs/plans/<plan>.md`" plus the header lines and anything decided since. Copying the task block gives two texts that drift. (If the plan is added in the first issue rather than already on the default branch, either have the later issues `Builds on` that first issue so their worktrees contain the plan, or include the task body in the issue without citing the uncommitted plan path.)
+3. **Keep each issue short and point at the plan.** "Implement Task 4 of `docs/plans/<plan>.md`" plus the header lines and anything decided since. Copying the task block gives two texts that drift. When the plan arrives with the first issue's PR, the later issues say `Builds on` that issue, so their worktrees have the file.
 4. **Write the dependencies so the run can parallelise.** `Builds on: #N` when the task needs #N's code; `Runs after: #N` only when it needs #N merged or decided. Name the files each task creates and the existing ones it edits. A plan in task order is usually not a chain: find the tasks that only share the scaffold and say so, because those are the parallel lanes.
 5. **The scaffold task is first and alone.** It creates the project's rules file, the verification gate and CI. Until it merges, the plan's own constraints section stands in for the rules in step 0, `ci_state.py` reports `NO_CI`, and nothing else has a gate to pass.
 6. Show the owner the list (title, builds on, runs after, files) before filing. File in task order so issue numbers follow the plan.
@@ -137,7 +160,8 @@ For a written plan with numbered tasks (and usually a spec beside it) that shoul
 - `references/issue-format.md`: the queue's contract, the template, and the header lines.
 - `references/planning.md`: sorting rules, lanes and collisions, the plan and report formats.
 - `references/plan-to-queue.md`: seeding an empty repo, sizing issues, writing dependencies for parallel work.
-- `references/worker-brief.md`: the brief each agent gets.
+- `references/worker-brief.md`: worker setup, the brief each worker gets, the ledger, the pre-push check.
+- `references/harnesses/`: one file per harness (Claude Code, Antigravity, OpenAI Codex): how to dispatch, resume and wait, the model for each tier. Read only yours.
 - `references/after-merge.md`: restacking, conflict checks, shallow-clone repair.
 - `references/example-harmony.md`: the 2026-11-12 run and the dry-run plan for #30 to #33.
-- `scripts/scan_queue.py`, `scripts/ci_state.py`, `scripts/landed.py`: run them; read them only to change them.
+- `scripts/scan_queue.py`, `scripts/ci_state.py`, `scripts/prepush_check.py`, `scripts/landed.py`: run them; read them only to change them.

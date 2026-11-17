@@ -1,6 +1,6 @@
 # Worker brief
 
-Each runnable issue gets one agent, mapped from the issue's suggested model to the active harness. The orchestrator creates the worktree and venv first (git operations one at a time), so the worker never clones or pushes.
+Each runnable issue gets one worker, on the model your harness file (`harnesses/`) gives for the issue's tier. The orchestrator creates the worktree and venv first (git operations one at a time), so the worker never clones or pushes.
 
 The brief is in two parts. What every worker in the run shares is written once to `<clone>/.worktrees/shared-rules.md`; each worker is sent only the path to it and the lines about its own issue. In one run of seven workers the shared rules were about sixty lines repeated seven times.
 
@@ -16,12 +16,11 @@ Repo rules (from CLAUDE.md, AGENTS.md, GEMINI.md, CONTRIBUTING.md; they win over
 - <any other rule that bears on the work>
 
 Your workspace is your worktree and nothing else:
-- Use your harness's native file tools (`Read`/`Edit`/`Write` or `read_file`/`edit_file`/`write_file`) to inspect and edit files. Never run shell commands (`grep`, `cat`, `head`, `tail`, `wc`, `git grep`, `find`) to read or search files: unnecessary shell calls trigger interactive approval prompts and stall parallel lanes.
 - Run every command with the worktree's own virtualenv, as <worktree>/.venv/bin/python -m ..., never a
   bare `python` or `pytest`: the system Python may have another checkout installed and would test that.
-- Batch your shell commands so you run at most two shell invocations: (1) the full verification gate, and (2) `git -C <worktree> add ... && git -C <worktree> commit ...`.
 - Anything you write outside git (gate logs, notes, PR_BODY.md) goes under <worktree>/.queue/, which is
   already excluded from git. Never write to a folder another worker could share.
+<the lines your harness file lists under "Add to the shared rules", if it lists any>
 
 Do:
 1. Implement the issue as written; where you deviate, note why.
@@ -36,12 +35,14 @@ Do:
    Do not say "CI is green": you have not seen CI.
 ```
 
+The harness lines are copied in only for the harness the run is on. A rule that keeps one harness from stalling can be impossible in another: "read files with your file tools, not the shell" suits a harness that asks a person to approve shell commands, and cannot be followed in one that reads files through its shell.
+
 ## Part 2: one worker's brief
 
 ```text
 You are implementing issue #<N> in <OWNER/REPO>: "<title>".
-First read the run's rules at `<clone>/.worktrees/shared-rules.md` and the full issue body at
-`<clone>/.worktrees/<slug>/.queue/ISSUE.md` using your file-read tool (do not run `gh api` in the shell).
+First read the run's rules at <clone>/.worktrees/shared-rules.md, then the issue body, in full, at
+<clone>/.worktrees/<slug>/.queue/ISSUE.md (saved for you: there is no need to fetch it).
 
 - Worktree: <clone>/.worktrees/<slug>, branch <branch>, based on <main | branch-of-#M (same lane: #M's
   commits are below yours; don't touch #M's changes)>.
@@ -51,13 +52,14 @@ First read the run's rules at `<clone>/.worktrees/shared-rules.md` and the full 
 
 ## Orchestrator setup per worker
 
-Place every worktree inside the repository at `<clone>/.worktrees/<slug>` (where `<slug>` is a short kebab-case name for the issue, e.g. `issue-12-rate-limit` or `rate-limit`). Keeping worktrees under `<clone>/.worktrees/` ensures workers stay inside workspace sandbox boundaries across harnesses.
+Place every worktree inside the repository at `<clone>/.worktrees/<slug>` (where `<slug>` is a short kebab-case name for the issue, e.g. `issue-12-rate-limit` or `rate-limit`). Some harnesses confine a worker to the workspace, and a worktree beside the clone is outside it.
 
 ```sh
 # once per run, exclude .worktrees/ from git in the main checkout
 mkdir -p <clone>/.worktrees
-grep -qxF ".worktrees/" "$(git -C <clone> rev-parse --git-path info/exclude)" || \
-  echo ".worktrees/" >> "$(git -C <clone> rev-parse --git-path info/exclude)"
+EXCLUDE="$(git -C <clone> rev-parse --path-format=absolute --git-path info/exclude)"
+grep -qxF ".worktrees/" "$EXCLUDE" || echo ".worktrees/" >> "$EXCLUDE"
+grep -qxF ".queue/" "$EXCLUDE" || echo ".queue/" >> "$EXCLUDE"       # every worktree shares this file
 
 # one worker at a time (<path> is <clone>/.worktrees/<slug>)
 git -C <clone> fetch --depth=50 origin main
@@ -65,72 +67,59 @@ git -C <clone> worktree add -b <branch> <path> origin/main          # or <base-b
 python3 -m venv <path>/.venv
 <path>/.venv/bin/pip install -q <what the repo's CI installs>               # see below
 <path>/.venv/bin/python -c "import <pkg>, sys; print(<pkg>.__file__)"   # must print a path under <path>
-mkdir -p <path>/.queue && echo ".queue/" >> "$(git -C <path> rev-parse --git-path info/exclude)"
+mkdir -p <path>/.queue
 gh api repos/<OWNER/REPO>/issues/<N> -q .body > <path>/.queue/ISSUE.md
 ```
 
-Saving `<path>/.queue/ISSUE.md` during orchestrator setup lets the worker read its prompt with a native file read (`Read` / `read_file`) instead of running an extra `gh api` shell command.
+`--path-format=absolute` matters: without it git prints `.git/info/exclude` relative to `<clone>`, and from any other directory the two lines after it read and write a different file (or another repository's). The exclude file is shared by every worktree of the clone, so both entries are written once.
+
+Saving the issue body during setup means no worker calls the API: one fewer command per worker, and one fewer thing to hit the proxy's limit.
 
 Install what the repo's CI job installs, read from its workflow or CONTRIBUTING.md: `-e "<path>[dev]"` for a package with a `pyproject.toml`, `-r requirements.txt -r requirements-dev.txt` for an app that has only requirements files. Guessing `-e ".[dev]"` fails on the second kind.
 
 The last line is the check that the venv tests this worktree's code and not another checkout's; it applies when the repo is an installable package. If it prints any other path, the editable install went to the wrong place; fix it before starting the worker. For an app run from its directory there is nothing to import-check: run the gate from `<path>`.
 
-Branch names: `<harness>/<repo-short>-<slug>` (`claude/<repo-short>-<slug>` in Claude Code, `agy/<repo-short>-<slug>` in Antigravity, `codex/<repo-short>-<slug>` in OpenAI Codex, where `<repo-short>` is the repository name without a common prefix like `mcp-server-`, or the full repo name if none), unless the repo's rules say otherwise.
+Branch names: `<prefix>/<repo-short>-<slug>`, with the prefix from your harness file (the hand run used `claude/harmony-sleep-timer`), where `<repo-short>` is the repository name without a common prefix like `mcp-server-`, or the full repo name if none, unless the repo's rules say otherwise.
 
-## On-disk queue ledger (`<clone>/.worktrees/queue-state.md`)
+## The queue ledger (`<clone>/.worktrees/queue-state.md`)
 
-Long queue runs can hit context compaction or a session restart while workers are running or while waiting for the owner to merge stacked PRs. Before dispatching the first worker (Step 1d), write `<clone>/.worktrees/queue-state.md` and update it at every state transition (worker dispatched, worker finished, branch restacked/pushed, PR opened, CI green, PR merged):
+A long run can lose its context to compaction or a new session while workers are out, or while it waits for the owner to merge. The ledger holds what cannot be worked out again from git and GitHub: which lane each issue is in, what it started from, which worker has it, the merge order and the numbers handed out. Write it before the first worker starts (step 1d) and update it at every dispatch, hand-back, push and merge.
 
 ```markdown
-# Queue state for <OWNER/REPO> (default branch: <main> at <sha7>)
+# Queue state for <OWNER/REPO>
 
 - Planned merge order: #<N1> → #<N2> → #<N3>
 - Numbers handed out: <slot assignments or "none">
 
-| Issue | Lane | Worktree | Branch | Base | Head | Worker ID | PR | State |
-|---|---|---|---|---|---|---|---|---|
-| #12 | A (1/2) | `.worktrees/issue-12` | `agy/repo-slug` | `main` (`a1b2c3d`) | `d4e5f6a` | `<conversationId or agentId>` | #34 | `GREEN` |
-| #13 | A (2/2) | `.worktrees/issue-13` | `agy/repo-next` | `agy/repo-slug` | `-` | `<conversationId or agentId>` | `-` | `RUNNING` |
+| Issue | Lane | Worktree | Branch | Started from | Worker | PR | Stage |
+|---|---|---|---|---|---|---|---|
+| #12 | A (1/2) | `.worktrees/rate-limit` | `<prefix>/app-rate-limit` | `main` | `<worker id>` | #34 | PR open |
+| #13 | A (2/2) | `.worktrees/rate-limit-ui` | `<prefix>/app-rate-limit-ui` | `<prefix>/app-rate-limit` | `<worker id>` | - | dispatched |
 ```
 
-When resuming after context compaction, a session restart, or the owner saying `"merged"`, read `<clone>/.worktrees/queue-state.md` first (alongside `git worktree list` and `git log`) rather than relying on conversation memory—and never re-dispatch an issue whose row already has a committed `Head` or open `PR`.
+Stage is one of: `dispatched`, `handed back`, `checked` (the pre-push check passed), `pushed`, `PR open`, `merged`.
 
-## Pre-push scope and spec check (Step 1e, before pushing or restacking)
+Not in the ledger: commit SHAs and CI state. Read those from `git` and `ci_state.py` each time. A SHA copied into a table is wrong after the first restack, and a "green" written down an hour ago is an agent's word about CI.
 
-When a worker reports back, verify its work before pushing its branch or starting a dependent branch on top of it:
+On resuming (a compacted context, a new session, or the owner saying "merged"), read the ledger, then `git worktree list` and the open PRs. Where the ledger and git or GitHub disagree, they are right: correct the ledger and say what differed. Never dispatch an issue again when its branch has commits past where it started, or it has an open PR.
 
-1. **Diff & lane boundary check:** Run `git -C <path> diff --stat <base>..<branch>` (where `<base>` is `origin/main` or the parent branch in the lane). Confirm that:
-   - No shared or generated files (from Step 0) were modified.
-   - No out-of-lane files belonging to a parallel lane were modified.
-   - Every required "changes together" file (from Step 0, e.g., `README.md`, `CHANGELOG.md`, `tests/`, registry/checklist) expected for this issue is present in the diff.
-2. **PR body contract check:** Read `<path>/.queue/PR_BODY.md` and confirm its first line is `Closes #<N>` (plus any stacked-PR note when stacked) and that it records the decisions made, any deviations from the prompt, and what remains unverified.
+## Pre-push check (step 1e, before pushing a branch or building on it)
 
-If either check fails, resume the worker (`send_message` / `followup_task` / `Agent`) with the exact discrepancy so it fixes the commit and re-runs the gate before you push.
+```sh
+python3 <skill-dir>/scripts/prepush_check.py <path> --base <started from> --issue <N> \
+    --forbid '<pattern>' --other-lane '<pattern>' --require '<pattern>'
+```
 
-## Harness adaptation (dispatching, model mapping, waiting, resuming)
+- `--base`: the row's "Started from" (`origin/main`, or the branch below it in the lane).
+- `--forbid`: the shared and generated files from step 0, one option per pattern (`'shared/*'`).
+- `--other-lane`: files the plan gave to a parallel lane and to no one else. Leave out every file both lanes are meant to add to. In the hand run, four parallel branches had fifteen files in common, all planned (a tool registration, a README row, a changelog bullet each); listing those would have failed all four.
+- `--require`: what step 0 says changes together with this kind of work (`CHANGELOG.md`, `'tests/*'`), where it applies to this issue.
 
-Detect your active harness from your declared tool list (`Agent` = Claude Code, `invoke_subagent` = Antigravity, `spawn_agent` = OpenAI Codex) and follow the matching column:
+It fails on a forbidden or out-of-lane file, a required file missing from the diff, uncommitted work, a branch with no commits, and a `PR_BODY.md` that is missing or does not open with `Closes #<N>`. On `FAIL`, resume the worker with the output; it fixes the commit and runs the gate again before you push.
 
-| Action | Claude Code | Antigravity (`agy`) | OpenAI Codex |
-|---|---|---|---|
-| **Native model names (for `**Suggested model:**` and plan tables)** | **Heavy:** `Opus`<br>**Standard:** `Sonnet`<br>**Fast:** `Haiku` | **Heavy:** `Gemini Pro`<br>**Standard:** `Gemini Flash`<br>**Fast:** `Gemini Flash-Lite` | **Heavy:** `gpt-5.4 (high)`<br>**Standard:** `gpt-5.4 (medium)`<br>**Fast:** `gpt-5.4-mini (low)` |
-| **Dispatch worker (Step 1e)** | `Agent` tool (`prompt`: Part 2 brief; launch parallel lanes in a single response) | `invoke_subagent(TypeName="self", Workspace="inherit", Role="Issue #<N> Worker", Prompt=<Part 2 brief>, Model=<mapped>)` (always `Workspace="inherit"` because the worktree already exists at `<clone>/.worktrees/<slug>`) | `spawn_agent` with `{fork_turns: "none", message: <Part 2 brief>, model: <mapped>, reasoning_effort: <mapped>}` |
-| **Map `**Suggested model:**` to dispatch parameter** | **Heavy** (`Opus` / `Gemini Pro` / `high`) → `opus`<br>**Standard** (`Sonnet` / `Gemini Flash` / `medium`) → `sonnet`<br>**Fast** (`Haiku` / `Gemini Flash-Lite` / `low`) → `haiku` | **Heavy** (`Gemini Pro` / `Opus` / `high`) → `"pro"`<br>**Standard** (`Gemini Flash` / `Sonnet` / `medium`) → `"flash"` (or `"inherit"`)<br>**Fast** (`Gemini Flash-Lite` / `Haiku` / `low`) → `"flash_lite"` | Pick from current spawn allowlist and set both `model` and `reasoning_effort`:<br>**Heavy** (`gpt-5.4 (high)` / `Opus` / `Gemini Pro`) → `reasoning_effort: "high"`<br>**Standard** (`gpt-5.4 (medium)` / `Sonnet` / `Gemini Flash`) → `reasoning_effort: "medium"`<br>**Fast** (`gpt-5.4-mini (low)` / `Haiku` / `Gemini Flash-Lite`) → `reasoning_effort: "low"` |
-| **Wait for workers** | Wait on tool return or background agent completion notification | **Reactive wakeup**: after invoking the lane's subagents, end your turn (call no more tools). The system automatically wakes you when each worker finishes and replies. Never poll. | Call `wait_agent` in bounded stretches (`timeout_ms`: `300000`–`600000`, 5–10 min); never poll with short timeouts |
-| **Resume worker on CI or pre-push failure (Step 1e/1f)** | Resume the worker agent with the failure log (or dispatch a fresh `Agent` on the same worktree) | `send_message(Recipient="<conversationId>", Message=<failure details and instructions>)` and end turn to wait for reply | `followup_task` targeting the worker's agent ID with the failure details |
-| **Wait on `ci_state.py` `PENDING` (Step 1f)** | Wait 30–60s between checks | Call `schedule(DurationSeconds=45, Prompt="Re-run ci_state.py OWNER/REPO <PR>")` and **end your turn** (never use a shell `sleep` command as a timer) | Wait 30–60s between checks |
+The check works on file names. It cannot see two lanes changing the same function in a file both may touch; that is what the lane plan in step 1c is for.
 
-### Antigravity (`agy`) permissions and command allowlist
-
-In Antigravity's default `request-review` mode, every un-allowlisted shell command pauses the orchestrator or worker for human approval. To run `issue-queue` without constant approval prompts:
-
-- **Per-project setting (recommended):** Set the project's **Auto-Execution Policy** (`Tool Execution Policy`) to `proceed-in-sandbox` or `always-proceed` (workers stay inside `<clone>/.worktrees/<slug>` and never push or merge).
-- **Or minimal Command Allowlist (when keeping `request-review`):** Allowlist these command prefixes in Antigravity Settings (`Command Allowlist`) so routine setup, local gates, and git worktree operations run uninterrupted while still prompting before `git push` or opening a PR:
-  - `python3`, `.venv/bin/python`, `.venv/bin/pip`
-  - `git status`, `git log`, `git diff`, `git fetch`, `git worktree`, `git checkout`, `git rebase`, `git merge --ff-only`, `git add`, `git commit`, `git rev-parse`
-  - `mkdir -p`, `grep -qxF`, `gh api repos/` (read/GET queries, or allow `gh api` only when ready to create PRs)
-  - The target repo's gate tools (e.g., `pytest`, `ruff`, `mypy`, `node --check`, `sh -n`)
-- **Command formatting rule for orchestrator and workers:** Prefer `git -C <path> <subcommand>` and `<path>/.venv/bin/python -m ...` over `cd <path> && ...` so commands match allowlist prefixes directly.
+A `read:` line means the PR description never uses the word for decisions, deviations or what is unverified. A repo's PR template may word those differently, so read the description and decide. For a stacked branch, also check that it says what it sits on.
 
 ## Opening the PR
 
