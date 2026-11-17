@@ -10,7 +10,7 @@ Reads (REST only; GraphQL is blocked in some sessions):
   - whether the default branch exists (a new repository has none until its first commit),
     and whether each document a prompt cites by path is on it
 
-Prints, per prompt issue: the suggested model, the header lines if present
+Prints, per prompt issue: the suggested model and its tier, the header lines if present
 (Runs after / Builds on / Needs the owner / Reserves), every #N it mentions with that item's
 state, prose sentences that look like an owner gate or a publish step, and the
 files and numbered steps it says it will touch. Then the overlaps between issues.
@@ -34,6 +34,29 @@ HEADER = {
     "needs_owner": re.compile(r"\*\*Needs the owner:\*\*\s*(.+)", re.I),
     "reserves": re.compile(r"\*\*Reserves:\*\*\s*(.+)", re.I),
 }
+
+# The suggested model is a capability tier. An issue outlives the session that wrote it and
+# may be run from another harness, so the tier is what carries over; a model name written by
+# an older issue (or by habit) is read as its tier. Fast is tested first: "Flash-Lite" and
+# "mini (low)" would otherwise match a larger model's name.
+TIERS = (
+    ("fast", re.compile(r"\b(fast|haiku|flash[-_ ]?lite|mini|nano|low)\b", re.I)),
+    ("heavy", re.compile(r"\b(heavy|opus|pro|high)\b", re.I)),
+    ("standard", re.compile(r"\b(standard|sonnet|flash|medium)\b", re.I)),
+)
+
+
+def tier_of(model_line: str | None) -> str | None:
+    """heavy, standard or fast, from the first model the line names; None when unrecognised."""
+    if not model_line:
+        return None
+    # "<model>. <reason>" and "<model> or <alternative>": keep the model, drop the rest.
+    first = re.split(r"\.(?:\s|$)|\bor\b", model_line, maxsplit=1)[0]
+    for tier, pattern in TIERS:
+        if pattern.search(first):
+            return tier
+    return None
+
 
 # Phrases that mean "a person has to act or decide". Plain "owner" is not enough:
 # issue #30 in mcp-server-harmony says "the owner's hubs" and "the owner also runs
@@ -194,6 +217,7 @@ def main() -> int:
                 "title": i["title"],
                 "labels": [lb["name"] for lb in i["labels"]],
                 "header": header,
+                "tier": tier_of(header["model"]),
                 "docs_not_on_default_branch": sorted(d for d in set(CITED_DOC.findall(body)) if doc_missing(d)),
                 "has_contract_header": header["runs_after"] is not None
                 and header["needs_owner"] is not None,
@@ -241,6 +265,7 @@ def main() -> int:
         print(f"  labels: {', '.join(r['labels']) or '-'}")
         for k, v in r["header"].items():
             print(f"  {k}: {v or '(not stated)'}")
+        print(f"  tier: {r['tier'] or 'unknown (read the reason and choose; say so in the plan)'}")
         if not r["has_contract_header"]:
             print("  !! no Runs after / Needs the owner header: plan from the prose, read it in full")
         if r["docs_not_on_default_branch"]:

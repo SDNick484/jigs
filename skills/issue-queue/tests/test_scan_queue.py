@@ -55,6 +55,32 @@ class Patterns(unittest.TestCase):
         self.assertEqual(scan_queue.HEADER["runs_after"].search(body).group(1).strip(), "#31 (why)")
         self.assertEqual(scan_queue.HEADER["needs_owner"].search(body).group(1).strip(), "no")
 
+    def test_tier_is_read_from_a_tier_word_or_from_any_harness_model_name(self):
+        cases = {
+            "heavy. new subsystem": "heavy",
+            "standard. well bounded": "standard",
+            "fast. a one-line edit a test proves": "fast",
+            "Opus. tricky concurrency": "heavy",
+            "Sonnet 5.5. checklist work": "standard",
+            "Haiku. small edit": "fast",
+            "Gemini Pro (`pro`). new subsystem": "heavy",
+            "Gemini Flash. bounded": "standard",
+            "Gemini Flash-Lite (`flash_lite`). scaffold": "fast",
+            "gpt-5.4 (high). refusals": "heavy",
+            "gpt-5.4 (medium). bounded": "standard",
+            "gpt-5.4-mini (low). scaffold": "fast",
+        }
+        for line, tier in cases.items():
+            self.assertEqual(scan_queue.tier_of(line), tier, line)
+
+    def test_tier_uses_the_first_model_named_and_ignores_the_reason(self):
+        self.assertEqual(scan_queue.tier_of("Sonnet or Opus. bounded, but a fast path is touched"), "standard")
+        self.assertEqual(scan_queue.tier_of("standard. the heavy lifting is already merged"), "standard")
+
+    def test_tier_is_none_when_nothing_is_recognised(self):
+        self.assertIsNone(scan_queue.tier_of("whatever is cheapest"))
+        self.assertIsNone(scan_queue.tier_of(None))
+
     def test_doc_words_match_agent_rules_files_across_harnesses(self):
         body = "Updates README, CHANGELOG, CLAUDE.md, AGENTS.md, and GEMINI.md."
         self.assertEqual(
