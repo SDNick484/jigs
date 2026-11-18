@@ -15,8 +15,23 @@ skills/
     tests/          tests for those scripts (optional)
 ```
 
-One directory per skill. Each is self-contained: copy `skills/<name>/` into your skills directory
-and it works without the rest of this repo.
+One directory per skill. Each is self-contained and works without the rest of this repo.
+
+## Install
+
+With Node.js and git, from the project you want the skill in:
+
+```sh
+npx skills add SDNick484/jigs --skill issue-queue
+```
+
+Add `-a claude-code -a codex -a antigravity -y` to choose the agents and skip the prompts, and
+`-g` to install for your user instead of the project. `npx skills add SDNick484/jigs --list`
+shows every skill here, and `npx skills update` takes later changes. Checked with version 1.9.0
+of the installer, which is the open `skills` command line tool and not part of this repo. It
+sends install telemetry by default; its documentation says how to turn that off.
+
+Or copy `skills/<name>/` into your skills directory by hand:
 
 | Harness | Skills directory |
 |---|---|
@@ -26,6 +41,8 @@ and it works without the rest of this repo.
 
 These paths change between versions; your harness's documentation has the current ones, and the
 one for skills shared across all your projects.
+
+To run, `issue-queue` needs Python 3 and the GitHub command line tool (`gh`), signed in.
 
 `issue-queue` runs in all three. Its procedure is written in action words (dispatch a worker,
 resume it, wait), and `skills/issue-queue/references/harnesses/` has one short file per harness
