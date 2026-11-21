@@ -31,6 +31,8 @@ Two arguments to `scripts/sweep_status.py`:
 
 Check the probe against the reference before trusting it: `--ref <commit before the reference change>` must say TODO for that repository and `--ref <the change>` must say DONE. A probe that says DONE for both is matching something that was always there.
 
+A pattern says "present somewhere in the file", not "present everywhere it is needed". For a change of the form *every X in the file must have Y* (every tool a declaration, every handler a check), a file with one Y and ten bare X reads DONE. Don't probe such a change by its Y. Probe the pin or the file that brings the enforcing check, and let that check, in the repository's own gate, decide completeness.
+
 Some changes can't be probed with one pattern (a refactor, a behaviour). Then probe for the nearest fixed sign (a new test name, a new file), say in the plan what the probe can't see, and read those repositories by hand.
 
 ## Is it shared code?
@@ -41,3 +43,13 @@ The change belongs in the source repository. After it merges there, that reposit
 
 - **Discovery by name.** A tool that finds members by a name pattern misses members named differently. In the family this skill came from, the sync tool looks for one name prefix, and two other repositories carry the same lock file; one of them was pinned to an older commit than the rest, and the other was synced by hand. Run the probe with `--marker <the lock file>` and an anchor of the lock file itself, `--has` the new commit id: every member not at the new commit shows as TODO, whatever it is called.
 - **Reading CI afterwards.** A tool that opens PRs has not seen their CI. Run `ci_state.py` on each.
+
+### A sync that every member has to adapt to
+
+Worked case. A shared module gained per-tool authorization: a decorator each server must put on every tool, and a shared test, synced in with the module, that fails naming any tool without one. Syncing one member locally and running its gate gave: 631 passed, 1 failed, the failure listing all eleven of that server's tools.
+
+- Fixed: the synced files, at one source commit.
+- Derived: which tier each tool belongs to, the tools whose tier depends on their arguments, and the confirmation sentence for each tool in the most restricted tier. None of that can be copied from a sibling; the design itself said each member's PR settles its own list.
+- Probe: the lock file pinned to the new commit. It cannot see whether every tool is declared; the synced test can, and runs in each member's gate.
+- Consequence for the tool: the all-members sync opens a PR only for members whose checks pass, so here it opens none. One PR per member, sync and declarations together.
+- Consequence for the plan: the tier list is a safety classification, so the pilot's PR carries the whole proposed table and the rest wait for the owner's answer to it.
