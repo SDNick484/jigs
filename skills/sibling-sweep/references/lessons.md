@@ -43,3 +43,7 @@ Every wave that needed a change in a shared module made it in the shared reposit
 ## Public rules reach the commit
 
 A repository with a privacy scan over history failed a PR on the sign-off line of an automated commit, not on any file. Commit author, committer, message, branch name and PR text are all public surface. Step 0 reads each repository's rule for them, and sync or sweep commits are authored with the identity the repository states, not whatever the local git config holds.
+
+## A sync can need an adaptation in the same PR
+
+Found in review before the second live run. The skill treated a change as either shared code (source repository, then its sync tool) or per-repository edits. The next change waiting was both: a shared module whose new test fails in every member until that member declares something on each of its tools. Followed as written, step 2 would have run the all-members sync tool, which opens a PR only where checks pass, and reported that nothing could be opened. Step 2 now names the mixed case, and `reading-the-change.md` has it worked through.

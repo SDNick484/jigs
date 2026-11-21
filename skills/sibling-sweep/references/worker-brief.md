@@ -23,6 +23,8 @@ The change:
 Repo rules (from its CLAUDE.md and CONTRIBUTING.md; they win over this brief):
 - Gate: <exact commands>
 - Do not edit: <shared or generated files>. If the change seems to need it, stop and report.
+  <for a sync that needs adaptation: "These change only by running <the source repository's per-member sync command>,
+  which is your first step. Never edit them by hand, including to make a test pass.">
 - Changes together with this kind of change: <changelog section, README table, a test, ...>
   <or, where the repository's rules don't say: the orchestrator's decision for the whole sweep>
 - Commits: <author identity, attribution lines, what must not appear in a message>

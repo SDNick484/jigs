@@ -48,6 +48,12 @@ If the fixed part lives in a file some repository marks as shared or generated, 
 2. After it merges, run **that repository's own sync tool** to open the per-repo PRs. Don't re-implement it.
 3. The sweep's job is then the follow-through the tool doesn't do: find family members the tool does not discover (step 3: its discovery rule is usually a name pattern), verify CI on every PR it opened with `ci_state.py`, and report in the one table.
 
+**When the sync needs each member to change too.** Some shared changes arrive with a check that every member fails until it adapts: a coverage test, a renamed function, a new required declaration. Then the sync is the fixed part of an ordinary sweep and the adaptation is its derived part, and both go in **one PR per member**: a sync-only PR would be red, and an adaptation-only PR has nothing to adapt to.
+
+- Find out before planning, not from nine red PRs: sync the pilot's checkout locally with the source repository's per-member command and run its gate. What fails is the derived part.
+- An all-members sync tool that opens a PR only where the checks pass will open none. That is the expected result, not a failure to work around: use the per-member command in each checkout (step 6), never a hand copy of the shared files.
+- Probe with the lock or manifest pin (step 3). The pin says the sync happened; only the member's gate, with the check the sync brought, says the adaptation is complete. Say in the plan that the probe cannot see the second half.
+
 ## 3. Find the family by probing, not by remembering
 
 ```sh
@@ -66,9 +72,11 @@ The candidates are **every repository the owner has**, taken from a listing made
 
 Then check each default branch with `python3 scripts/ci_state.py OWNER/REPO ref:<default branch>`. A red default branch fails that repository's PR for a reason that is not the sweep's: hold that repository and say so.
 
+Last, look for work already in flight on the same files: list each candidate's open PRs and the files they touch. Another sweep or a feature branch editing the anchor files means two sets of PRs that conflict in every repository at once. Finish or merge the first, or ask the owner which goes first; don't start a second sweep across files an open one is still changing.
+
 ## 4. Plan, show it, then go
 
-Post the plan (`references/formats.md`): the three parts from step 1, the table from step 3 with what will differ per repository where that is already known, the pilot, the branch name, and anything held. Decide here, once for the whole sweep, anything the repositories' rules leave open, such as whether the change gets a changelog entry where a changelog exists: left to each worker, three workers gave two answers. One branch name and one commit subject for the whole sweep, the same in every repository: it is how the wave is found again later, and how step 3 recognises a PR that is already open.
+Post the plan (`references/formats.md`): the three parts from step 1, the table from step 3 with what will differ per repository where that is already known, the pilot, the branch name, and anything held. Decide here, once for the whole sweep, anything the repositories' rules leave open, such as whether the change gets a changelog entry where a changelog exists: left to each worker, three workers gave two answers. When the derived part is a classification the owner will be held to (which operations count as dangerous, what an automated caller may do, a default that affects safety), the pilot's PR carries the full table of proposed answers and the reasoning, and the other repositories wait for the owner's reply to it, not only for green CI: a pattern confirmed once is cheaper than nine lists corrected one at a time. One branch name and one commit subject for the whole sweep, the same in every repository: it is how the wave is found again later, and how step 3 recognises a PR that is already open.
 
 If nothing in the plan needs the owner's answer, start and say so. If something does (a repository that is in or out, a derived part that needs a decision, a red default branch), ask one question and wait.
 
